@@ -1,5 +1,7 @@
+mod instruction;
 mod registers;
 
+use instruction::Instruction;
 use registers::Registers;
 
 #[allow(clippy::upper_case_acronyms)]
@@ -18,5 +20,9 @@ impl CPU {
             sp: 0,
             registers: Registers::new(),
         }
+    }
+
+    pub fn execute(&mut self, instruction: Instruction) {
+        unimplemented!();
     }
 }

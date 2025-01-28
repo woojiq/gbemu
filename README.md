@@ -12,6 +12,6 @@ DMG-01 (How to Emulate a Game Boy): https://rylev.github.io/DMG-01/public/book
 
 Rust implementation (DMG-01): https://github.com/rylev/DMG-01/blob/master/lib-dmg-01/src
 
-Opcodes: https://gbdev.io/gb-opcodes/optables/
+Opcodes: https://izik1.github.io/gbops/
 
 Opcodes textual explanation: https://rgbds.gbdev.io/docs/v0.9.0/gbz80.7

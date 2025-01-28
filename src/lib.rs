@@ -1,5 +1,6 @@
 #![allow(clippy::new_without_default)]
 #![allow(clippy::upper_case_acronyms)]
+#![allow(non_camel_case_types)]
 
 pub(crate) mod cpu;
 pub(crate) mod motherboard;
