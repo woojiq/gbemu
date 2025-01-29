@@ -52,18 +52,6 @@ pub enum Bit8Instruction {
     SBC_A_HLP,
     SBC_A_U8,
 
-    AND_A_R8(R8),
-    AND_A_HLP,
-    AND_A_U8,
-
-    XOR_A_R8(R8),
-    XOR_A_HLP,
-    XOR_A_U8,
-
-    OR_A_R8(R8),
-    OR_A_HLP,
-    OR_A_U8,
-
     CP_A_R8(R8),
     CP_A_HLP,
     CP_A_U8,
@@ -84,15 +72,47 @@ pub enum Bit16Instruction {
 
 pub enum BitwiseLogicInstruction {
     CPL,
+
+    AND_A_R8(R8),
+    AND_A_HLP,
+    AND_A_U8,
+
+    XOR_A_R8(R8),
+    XOR_A_HLP,
+    XOR_A_U8,
+
+    OR_A_R8(R8),
+    OR_A_HLP,
+    OR_A_U8,
 }
 
-pub enum BitFlagInstruction {}
+pub enum BitFlagInstruction {
+    BIT_U3_R8E(U3, R8E),
+    RES_U3_R8E(U3, R8E),
+    SET_U3_R8E(U3, R8E),
+}
 
 pub enum BitShiftInstruction {
     RLA,
+    RL_R8(R8),
+    RL_HLP,
+    RLC_R8(R8),
+    RLC_HLP,
     RLCA,
     RRA,
+    RR_R8(R8),
+    RR_HLP,
     RRCA,
+    RRC_R8(R8),
+    RRC_HLP,
+    SLA_R8(R8),
+    SLA_HLP,
+    SRA_R8(R8),
+    SRA_HLP,
+    SRL_R8(R8),
+    SRL_HLP,
+    SWAP_R8(R8),
+    SWAP_HLP,
 }
 
 pub enum JumpsAndSubroutineInstruction {
@@ -158,6 +178,12 @@ pub enum R8 {
     L,
 }
 
+/// Extended [`R8`]
+pub enum R8E {
+    R8(R8),
+    HLP,
+}
+
 /// Any of the general-purpose 16-bit registers (BC, DE, HL).
 pub enum R16 {
     BC,
@@ -194,6 +220,18 @@ pub enum CC {
     C,
     /// Execute if C is not set.
     NC,
+}
+
+/// 3-bit unsigned bit index (0 to 7).
+pub enum U3 {
+    B0,
+    B1,
+    B2,
+    B3,
+    B4,
+    B5,
+    B6,
+    B7,
 }
 
 impl Instruction {
@@ -399,31 +437,77 @@ impl Instruction {
             0x9e => Some(Instruction::Bit8(Bit8Instruction::SBC_A_HLP)),
             0x9f => Some(Instruction::Bit8(Bit8Instruction::SBC_A_R8(R8::A))),
 
-            0xa0 => Some(Instruction::Bit8(Bit8Instruction::AND_A_R8(R8::B))),
-            0xa1 => Some(Instruction::Bit8(Bit8Instruction::AND_A_R8(R8::C))),
-            0xa2 => Some(Instruction::Bit8(Bit8Instruction::AND_A_R8(R8::D))),
-            0xa3 => Some(Instruction::Bit8(Bit8Instruction::AND_A_R8(R8::E))),
-            0xa4 => Some(Instruction::Bit8(Bit8Instruction::AND_A_R8(R8::H))),
-            0xa5 => Some(Instruction::Bit8(Bit8Instruction::AND_A_R8(R8::L))),
-            0xa6 => Some(Instruction::Bit8(Bit8Instruction::AND_A_HLP)),
-            0xa7 => Some(Instruction::Bit8(Bit8Instruction::AND_A_R8(R8::A))),
-            0xa8 => Some(Instruction::Bit8(Bit8Instruction::XOR_A_R8(R8::B))),
-            0xa9 => Some(Instruction::Bit8(Bit8Instruction::XOR_A_R8(R8::C))),
-            0xaa => Some(Instruction::Bit8(Bit8Instruction::XOR_A_R8(R8::D))),
-            0xab => Some(Instruction::Bit8(Bit8Instruction::XOR_A_R8(R8::E))),
-            0xac => Some(Instruction::Bit8(Bit8Instruction::XOR_A_R8(R8::H))),
-            0xad => Some(Instruction::Bit8(Bit8Instruction::XOR_A_R8(R8::L))),
-            0xae => Some(Instruction::Bit8(Bit8Instruction::XOR_A_HLP)),
-            0xaf => Some(Instruction::Bit8(Bit8Instruction::XOR_A_R8(R8::A))),
+            0xa0 => Some(Instruction::BitwiseLogic(
+                BitwiseLogicInstruction::AND_A_R8(R8::B),
+            )),
+            0xa1 => Some(Instruction::BitwiseLogic(
+                BitwiseLogicInstruction::AND_A_R8(R8::C),
+            )),
+            0xa2 => Some(Instruction::BitwiseLogic(
+                BitwiseLogicInstruction::AND_A_R8(R8::D),
+            )),
+            0xa3 => Some(Instruction::BitwiseLogic(
+                BitwiseLogicInstruction::AND_A_R8(R8::E),
+            )),
+            0xa4 => Some(Instruction::BitwiseLogic(
+                BitwiseLogicInstruction::AND_A_R8(R8::H),
+            )),
+            0xa5 => Some(Instruction::BitwiseLogic(
+                BitwiseLogicInstruction::AND_A_R8(R8::L),
+            )),
+            0xa6 => Some(Instruction::BitwiseLogic(
+                BitwiseLogicInstruction::AND_A_HLP,
+            )),
+            0xa7 => Some(Instruction::BitwiseLogic(
+                BitwiseLogicInstruction::AND_A_R8(R8::A),
+            )),
+            0xa8 => Some(Instruction::BitwiseLogic(
+                BitwiseLogicInstruction::XOR_A_R8(R8::B),
+            )),
+            0xa9 => Some(Instruction::BitwiseLogic(
+                BitwiseLogicInstruction::XOR_A_R8(R8::C),
+            )),
+            0xaa => Some(Instruction::BitwiseLogic(
+                BitwiseLogicInstruction::XOR_A_R8(R8::D),
+            )),
+            0xab => Some(Instruction::BitwiseLogic(
+                BitwiseLogicInstruction::XOR_A_R8(R8::E),
+            )),
+            0xac => Some(Instruction::BitwiseLogic(
+                BitwiseLogicInstruction::XOR_A_R8(R8::H),
+            )),
+            0xad => Some(Instruction::BitwiseLogic(
+                BitwiseLogicInstruction::XOR_A_R8(R8::L),
+            )),
+            0xae => Some(Instruction::BitwiseLogic(
+                BitwiseLogicInstruction::XOR_A_HLP,
+            )),
+            0xaf => Some(Instruction::BitwiseLogic(
+                BitwiseLogicInstruction::XOR_A_R8(R8::A),
+            )),
 
-            0xb0 => Some(Instruction::Bit8(Bit8Instruction::OR_A_R8(R8::B))),
-            0xb1 => Some(Instruction::Bit8(Bit8Instruction::OR_A_R8(R8::C))),
-            0xb2 => Some(Instruction::Bit8(Bit8Instruction::OR_A_R8(R8::D))),
-            0xb3 => Some(Instruction::Bit8(Bit8Instruction::OR_A_R8(R8::E))),
-            0xb4 => Some(Instruction::Bit8(Bit8Instruction::OR_A_R8(R8::H))),
-            0xb5 => Some(Instruction::Bit8(Bit8Instruction::OR_A_R8(R8::L))),
-            0xb6 => Some(Instruction::Bit8(Bit8Instruction::OR_A_HLP)),
-            0xb7 => Some(Instruction::Bit8(Bit8Instruction::OR_A_R8(R8::A))),
+            0xb0 => Some(Instruction::BitwiseLogic(BitwiseLogicInstruction::OR_A_R8(
+                R8::B,
+            ))),
+            0xb1 => Some(Instruction::BitwiseLogic(BitwiseLogicInstruction::OR_A_R8(
+                R8::C,
+            ))),
+            0xb2 => Some(Instruction::BitwiseLogic(BitwiseLogicInstruction::OR_A_R8(
+                R8::D,
+            ))),
+            0xb3 => Some(Instruction::BitwiseLogic(BitwiseLogicInstruction::OR_A_R8(
+                R8::E,
+            ))),
+            0xb4 => Some(Instruction::BitwiseLogic(BitwiseLogicInstruction::OR_A_R8(
+                R8::H,
+            ))),
+            0xb5 => Some(Instruction::BitwiseLogic(BitwiseLogicInstruction::OR_A_R8(
+                R8::L,
+            ))),
+            0xb6 => Some(Instruction::BitwiseLogic(BitwiseLogicInstruction::OR_A_HLP)),
+            0xb7 => Some(Instruction::BitwiseLogic(BitwiseLogicInstruction::OR_A_R8(
+                R8::A,
+            ))),
             0xb8 => Some(Instruction::Bit8(Bit8Instruction::CP_A_R8(R8::B))),
             0xb9 => Some(Instruction::Bit8(Bit8Instruction::CP_A_R8(R8::C))),
             0xba => Some(Instruction::Bit8(Bit8Instruction::CP_A_R8(R8::D))),
@@ -520,7 +604,7 @@ impl Instruction {
             0xe5 => Some(Instruction::StackManipulation(
                 StackManipulationInstruction::PUSH_R16(R16::HL),
             )),
-            0xe6 => Some(Instruction::Bit8(Bit8Instruction::AND_A_U8)),
+            0xe6 => Some(Instruction::BitwiseLogic(BitwiseLogicInstruction::AND_A_U8)),
             0xe7 => Some(Instruction::JumpsAndSubroutine(
                 JumpsAndSubroutineInstruction::RST(VEC::X20),
             )),
@@ -531,7 +615,7 @@ impl Instruction {
                 JumpsAndSubroutineInstruction::JP_HL,
             )),
             0xea => Some(Instruction::Load(LoadInstruction::LD_U16_A)),
-            0xee => Some(Instruction::Bit8(Bit8Instruction::XOR_A_U8)),
+            0xee => Some(Instruction::BitwiseLogic(BitwiseLogicInstruction::XOR_A_U8)),
             0xef => Some(Instruction::JumpsAndSubroutine(
                 JumpsAndSubroutineInstruction::RST(VEC::X28),
             )),
@@ -547,7 +631,7 @@ impl Instruction {
             0xf5 => Some(Instruction::StackManipulation(
                 StackManipulationInstruction::PUSH_AF,
             )),
-            0xf6 => Some(Instruction::Bit8(Bit8Instruction::OR_A_U8)),
+            0xf6 => Some(Instruction::BitwiseLogic(BitwiseLogicInstruction::OR_A_U8)),
             0xf7 => Some(Instruction::JumpsAndSubroutine(
                 JumpsAndSubroutineInstruction::RST(VEC::X30),
             )),
@@ -565,13 +649,860 @@ impl Instruction {
             0xff => Some(Instruction::JumpsAndSubroutine(
                 JumpsAndSubroutineInstruction::RST(VEC::X38),
             )),
+
             _ => None,
         }
     }
 
     fn from_byte_prefixed(byte: u8) -> Option<Self> {
         match byte {
-            _ => None,
+            0x00 => Some(Instruction::BitShift(BitShiftInstruction::RLC_R8(R8::B))),
+            0x01 => Some(Instruction::BitShift(BitShiftInstruction::RLC_R8(R8::C))),
+            0x02 => Some(Instruction::BitShift(BitShiftInstruction::RLC_R8(R8::D))),
+            0x03 => Some(Instruction::BitShift(BitShiftInstruction::RLC_R8(R8::E))),
+            0x04 => Some(Instruction::BitShift(BitShiftInstruction::RLC_R8(R8::H))),
+            0x05 => Some(Instruction::BitShift(BitShiftInstruction::RLC_R8(R8::L))),
+            0x06 => Some(Instruction::BitShift(BitShiftInstruction::RLC_HLP)),
+            0x07 => Some(Instruction::BitShift(BitShiftInstruction::RLC_R8(R8::A))),
+            0x08 => Some(Instruction::BitShift(BitShiftInstruction::RRC_R8(R8::B))),
+            0x09 => Some(Instruction::BitShift(BitShiftInstruction::RRC_R8(R8::C))),
+            0x0a => Some(Instruction::BitShift(BitShiftInstruction::RRC_R8(R8::D))),
+            0x0b => Some(Instruction::BitShift(BitShiftInstruction::RRC_R8(R8::E))),
+            0x0c => Some(Instruction::BitShift(BitShiftInstruction::RRC_R8(R8::H))),
+            0x0d => Some(Instruction::BitShift(BitShiftInstruction::RRC_R8(R8::L))),
+            0x0e => Some(Instruction::BitShift(BitShiftInstruction::RRC_HLP)),
+            0x0f => Some(Instruction::BitShift(BitShiftInstruction::RRC_R8(R8::A))),
+
+            0x10 => Some(Instruction::BitShift(BitShiftInstruction::RL_R8(R8::B))),
+            0x11 => Some(Instruction::BitShift(BitShiftInstruction::RL_R8(R8::C))),
+            0x12 => Some(Instruction::BitShift(BitShiftInstruction::RL_R8(R8::D))),
+            0x13 => Some(Instruction::BitShift(BitShiftInstruction::RL_R8(R8::E))),
+            0x14 => Some(Instruction::BitShift(BitShiftInstruction::RL_R8(R8::H))),
+            0x15 => Some(Instruction::BitShift(BitShiftInstruction::RL_R8(R8::L))),
+            0x16 => Some(Instruction::BitShift(BitShiftInstruction::RL_HLP)),
+            0x17 => Some(Instruction::BitShift(BitShiftInstruction::RL_R8(R8::A))),
+            0x18 => Some(Instruction::BitShift(BitShiftInstruction::RR_R8(R8::B))),
+            0x19 => Some(Instruction::BitShift(BitShiftInstruction::RR_R8(R8::C))),
+            0x1a => Some(Instruction::BitShift(BitShiftInstruction::RR_R8(R8::D))),
+            0x1b => Some(Instruction::BitShift(BitShiftInstruction::RR_R8(R8::E))),
+            0x1c => Some(Instruction::BitShift(BitShiftInstruction::RR_R8(R8::H))),
+            0x1d => Some(Instruction::BitShift(BitShiftInstruction::RR_R8(R8::L))),
+            0x1e => Some(Instruction::BitShift(BitShiftInstruction::RR_HLP)),
+            0x1f => Some(Instruction::BitShift(BitShiftInstruction::RR_R8(R8::A))),
+
+            0x20 => Some(Instruction::BitShift(BitShiftInstruction::SLA_R8(R8::B))),
+            0x21 => Some(Instruction::BitShift(BitShiftInstruction::SLA_R8(R8::C))),
+            0x22 => Some(Instruction::BitShift(BitShiftInstruction::SLA_R8(R8::D))),
+            0x23 => Some(Instruction::BitShift(BitShiftInstruction::SLA_R8(R8::E))),
+            0x24 => Some(Instruction::BitShift(BitShiftInstruction::SLA_R8(R8::H))),
+            0x25 => Some(Instruction::BitShift(BitShiftInstruction::SLA_R8(R8::L))),
+            0x26 => Some(Instruction::BitShift(BitShiftInstruction::SLA_HLP)),
+            0x27 => Some(Instruction::BitShift(BitShiftInstruction::SLA_R8(R8::A))),
+            0x28 => Some(Instruction::BitShift(BitShiftInstruction::SRA_R8(R8::B))),
+            0x29 => Some(Instruction::BitShift(BitShiftInstruction::SRA_R8(R8::C))),
+            0x2a => Some(Instruction::BitShift(BitShiftInstruction::SRA_R8(R8::D))),
+            0x2b => Some(Instruction::BitShift(BitShiftInstruction::SRA_R8(R8::E))),
+            0x2c => Some(Instruction::BitShift(BitShiftInstruction::SRA_R8(R8::H))),
+            0x2d => Some(Instruction::BitShift(BitShiftInstruction::SRA_R8(R8::L))),
+            0x2e => Some(Instruction::BitShift(BitShiftInstruction::SRA_HLP)),
+            0x2f => Some(Instruction::BitShift(BitShiftInstruction::SRA_R8(R8::A))),
+
+            0x30 => Some(Instruction::BitShift(BitShiftInstruction::SWAP_R8(R8::B))),
+            0x31 => Some(Instruction::BitShift(BitShiftInstruction::SWAP_R8(R8::C))),
+            0x32 => Some(Instruction::BitShift(BitShiftInstruction::SWAP_R8(R8::D))),
+            0x33 => Some(Instruction::BitShift(BitShiftInstruction::SWAP_R8(R8::E))),
+            0x34 => Some(Instruction::BitShift(BitShiftInstruction::SWAP_R8(R8::H))),
+            0x35 => Some(Instruction::BitShift(BitShiftInstruction::SWAP_R8(R8::L))),
+            0x36 => Some(Instruction::BitShift(BitShiftInstruction::SWAP_HLP)),
+            0x37 => Some(Instruction::BitShift(BitShiftInstruction::SWAP_R8(R8::A))),
+            0x38 => Some(Instruction::BitShift(BitShiftInstruction::SRL_R8(R8::B))),
+            0x39 => Some(Instruction::BitShift(BitShiftInstruction::SRL_R8(R8::C))),
+            0x3a => Some(Instruction::BitShift(BitShiftInstruction::SRL_R8(R8::D))),
+            0x3b => Some(Instruction::BitShift(BitShiftInstruction::SRL_R8(R8::E))),
+            0x3c => Some(Instruction::BitShift(BitShiftInstruction::SRL_R8(R8::H))),
+            0x3d => Some(Instruction::BitShift(BitShiftInstruction::SRL_R8(R8::L))),
+            0x3e => Some(Instruction::BitShift(BitShiftInstruction::SRL_HLP)),
+            0x3f => Some(Instruction::BitShift(BitShiftInstruction::SRL_R8(R8::A))),
+
+            0x40 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B0,
+                R8E::R8(R8::B),
+            ))),
+            0x41 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B0,
+                R8E::R8(R8::C),
+            ))),
+            0x42 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B0,
+                R8E::R8(R8::D),
+            ))),
+            0x43 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B0,
+                R8E::R8(R8::E),
+            ))),
+            0x44 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B0,
+                R8E::R8(R8::H),
+            ))),
+            0x45 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B0,
+                R8E::R8(R8::L),
+            ))),
+            0x46 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B0,
+                R8E::HLP,
+            ))),
+            0x47 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B0,
+                R8E::R8(R8::A),
+            ))),
+            0x48 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B1,
+                R8E::R8(R8::B),
+            ))),
+            0x49 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B1,
+                R8E::R8(R8::C),
+            ))),
+            0x4a => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B1,
+                R8E::R8(R8::D),
+            ))),
+            0x4b => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B1,
+                R8E::R8(R8::E),
+            ))),
+            0x4c => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B1,
+                R8E::R8(R8::H),
+            ))),
+            0x4d => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B1,
+                R8E::R8(R8::L),
+            ))),
+            0x4e => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B1,
+                R8E::HLP,
+            ))),
+            0x4f => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B1,
+                R8E::R8(R8::A),
+            ))),
+
+            0x50 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B2,
+                R8E::R8(R8::B),
+            ))),
+            0x51 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B2,
+                R8E::R8(R8::C),
+            ))),
+            0x52 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B2,
+                R8E::R8(R8::D),
+            ))),
+            0x53 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B2,
+                R8E::R8(R8::E),
+            ))),
+            0x54 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B2,
+                R8E::R8(R8::H),
+            ))),
+            0x55 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B2,
+                R8E::R8(R8::L),
+            ))),
+            0x56 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B2,
+                R8E::HLP,
+            ))),
+            0x57 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B2,
+                R8E::R8(R8::A),
+            ))),
+            0x58 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B3,
+                R8E::R8(R8::B),
+            ))),
+            0x59 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B3,
+                R8E::R8(R8::C),
+            ))),
+            0x5a => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B3,
+                R8E::R8(R8::D),
+            ))),
+            0x5b => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B3,
+                R8E::R8(R8::E),
+            ))),
+            0x5c => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B3,
+                R8E::R8(R8::H),
+            ))),
+            0x5d => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B3,
+                R8E::R8(R8::L),
+            ))),
+            0x5e => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B3,
+                R8E::HLP,
+            ))),
+            0x5f => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B3,
+                R8E::R8(R8::A),
+            ))),
+
+            0x60 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B4,
+                R8E::R8(R8::B),
+            ))),
+            0x61 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B4,
+                R8E::R8(R8::C),
+            ))),
+            0x62 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B4,
+                R8E::R8(R8::D),
+            ))),
+            0x63 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B4,
+                R8E::R8(R8::E),
+            ))),
+            0x64 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B4,
+                R8E::R8(R8::H),
+            ))),
+            0x65 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B4,
+                R8E::R8(R8::L),
+            ))),
+            0x66 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B4,
+                R8E::HLP,
+            ))),
+            0x67 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B4,
+                R8E::R8(R8::A),
+            ))),
+            0x68 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B5,
+                R8E::R8(R8::B),
+            ))),
+            0x69 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B5,
+                R8E::R8(R8::C),
+            ))),
+            0x6a => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B5,
+                R8E::R8(R8::D),
+            ))),
+            0x6b => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B5,
+                R8E::R8(R8::E),
+            ))),
+            0x6c => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B5,
+                R8E::R8(R8::H),
+            ))),
+            0x6d => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B5,
+                R8E::R8(R8::L),
+            ))),
+            0x6e => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B5,
+                R8E::HLP,
+            ))),
+            0x6f => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B5,
+                R8E::R8(R8::A),
+            ))),
+
+            0x70 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B6,
+                R8E::R8(R8::B),
+            ))),
+            0x71 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B6,
+                R8E::R8(R8::C),
+            ))),
+            0x72 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B6,
+                R8E::R8(R8::D),
+            ))),
+            0x73 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B6,
+                R8E::R8(R8::E),
+            ))),
+            0x74 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B6,
+                R8E::R8(R8::H),
+            ))),
+            0x75 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B6,
+                R8E::R8(R8::L),
+            ))),
+            0x76 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B6,
+                R8E::HLP,
+            ))),
+            0x77 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B6,
+                R8E::R8(R8::A),
+            ))),
+            0x78 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B7,
+                R8E::R8(R8::B),
+            ))),
+            0x79 => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B7,
+                R8E::R8(R8::C),
+            ))),
+            0x7a => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B7,
+                R8E::R8(R8::D),
+            ))),
+            0x7b => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B7,
+                R8E::R8(R8::E),
+            ))),
+            0x7c => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B7,
+                R8E::R8(R8::H),
+            ))),
+            0x7d => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B7,
+                R8E::R8(R8::L),
+            ))),
+            0x7e => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B7,
+                R8E::HLP,
+            ))),
+            0x7f => Some(Instruction::BitFlag(BitFlagInstruction::BIT_U3_R8E(
+                U3::B7,
+                R8E::R8(R8::A),
+            ))),
+
+            0x80 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B0,
+                R8E::R8(R8::B),
+            ))),
+            0x81 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B0,
+                R8E::R8(R8::C),
+            ))),
+            0x82 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B0,
+                R8E::R8(R8::D),
+            ))),
+            0x83 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B0,
+                R8E::R8(R8::E),
+            ))),
+            0x84 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B0,
+                R8E::R8(R8::H),
+            ))),
+            0x85 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B0,
+                R8E::R8(R8::L),
+            ))),
+            0x86 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B0,
+                R8E::HLP,
+            ))),
+            0x87 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B0,
+                R8E::R8(R8::A),
+            ))),
+            0x88 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B1,
+                R8E::R8(R8::B),
+            ))),
+            0x89 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B1,
+                R8E::R8(R8::C),
+            ))),
+            0x8a => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B1,
+                R8E::R8(R8::D),
+            ))),
+            0x8b => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B1,
+                R8E::R8(R8::E),
+            ))),
+            0x8c => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B1,
+                R8E::R8(R8::H),
+            ))),
+            0x8d => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B1,
+                R8E::R8(R8::L),
+            ))),
+            0x8e => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B1,
+                R8E::HLP,
+            ))),
+            0x8f => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B1,
+                R8E::R8(R8::A),
+            ))),
+
+            0x90 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B2,
+                R8E::R8(R8::B),
+            ))),
+            0x91 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B2,
+                R8E::R8(R8::C),
+            ))),
+            0x92 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B2,
+                R8E::R8(R8::D),
+            ))),
+            0x93 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B2,
+                R8E::R8(R8::E),
+            ))),
+            0x94 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B2,
+                R8E::R8(R8::H),
+            ))),
+            0x95 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B2,
+                R8E::R8(R8::L),
+            ))),
+            0x96 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B2,
+                R8E::HLP,
+            ))),
+            0x97 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B2,
+                R8E::R8(R8::A),
+            ))),
+            0x98 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B3,
+                R8E::R8(R8::B),
+            ))),
+            0x99 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B3,
+                R8E::R8(R8::C),
+            ))),
+            0x9a => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B3,
+                R8E::R8(R8::D),
+            ))),
+            0x9b => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B3,
+                R8E::R8(R8::E),
+            ))),
+            0x9c => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B3,
+                R8E::R8(R8::H),
+            ))),
+            0x9d => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B3,
+                R8E::R8(R8::L),
+            ))),
+            0x9e => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B3,
+                R8E::HLP,
+            ))),
+            0x9f => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B3,
+                R8E::R8(R8::A),
+            ))),
+
+            0xa0 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B4,
+                R8E::R8(R8::B),
+            ))),
+            0xa1 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B4,
+                R8E::R8(R8::C),
+            ))),
+            0xa2 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B4,
+                R8E::R8(R8::D),
+            ))),
+            0xa3 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B4,
+                R8E::R8(R8::E),
+            ))),
+            0xa4 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B4,
+                R8E::R8(R8::H),
+            ))),
+            0xa5 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B4,
+                R8E::R8(R8::L),
+            ))),
+            0xa6 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B4,
+                R8E::HLP,
+            ))),
+            0xa7 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B4,
+                R8E::R8(R8::A),
+            ))),
+            0xa8 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B5,
+                R8E::R8(R8::B),
+            ))),
+            0xa9 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B5,
+                R8E::R8(R8::C),
+            ))),
+            0xaa => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B5,
+                R8E::R8(R8::D),
+            ))),
+            0xab => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B5,
+                R8E::R8(R8::E),
+            ))),
+            0xac => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B5,
+                R8E::R8(R8::H),
+            ))),
+            0xad => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B5,
+                R8E::R8(R8::L),
+            ))),
+            0xae => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B5,
+                R8E::HLP,
+            ))),
+            0xaf => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B5,
+                R8E::R8(R8::A),
+            ))),
+
+            0xb0 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B6,
+                R8E::R8(R8::B),
+            ))),
+            0xb1 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B6,
+                R8E::R8(R8::C),
+            ))),
+            0xb2 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B6,
+                R8E::R8(R8::D),
+            ))),
+            0xb3 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B6,
+                R8E::R8(R8::E),
+            ))),
+            0xb4 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B6,
+                R8E::R8(R8::H),
+            ))),
+            0xb5 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B6,
+                R8E::R8(R8::L),
+            ))),
+            0xb6 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B6,
+                R8E::HLP,
+            ))),
+            0xb7 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B6,
+                R8E::R8(R8::A),
+            ))),
+            0xb8 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B7,
+                R8E::R8(R8::B),
+            ))),
+            0xb9 => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B7,
+                R8E::R8(R8::C),
+            ))),
+            0xba => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B7,
+                R8E::R8(R8::D),
+            ))),
+            0xbb => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B7,
+                R8E::R8(R8::E),
+            ))),
+            0xbc => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B7,
+                R8E::R8(R8::H),
+            ))),
+            0xbd => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B7,
+                R8E::R8(R8::L),
+            ))),
+            0xbe => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B7,
+                R8E::HLP,
+            ))),
+            0xbf => Some(Instruction::BitFlag(BitFlagInstruction::RES_U3_R8E(
+                U3::B7,
+                R8E::R8(R8::A),
+            ))),
+
+            0xc0 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B0,
+                R8E::R8(R8::B),
+            ))),
+            0xc1 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B0,
+                R8E::R8(R8::C),
+            ))),
+            0xc2 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B0,
+                R8E::R8(R8::D),
+            ))),
+            0xc3 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B0,
+                R8E::R8(R8::E),
+            ))),
+            0xc4 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B0,
+                R8E::R8(R8::H),
+            ))),
+            0xc5 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B0,
+                R8E::R8(R8::L),
+            ))),
+            0xc6 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B0,
+                R8E::HLP,
+            ))),
+            0xc7 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B0,
+                R8E::R8(R8::A),
+            ))),
+            0xc8 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B1,
+                R8E::R8(R8::B),
+            ))),
+            0xc9 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B1,
+                R8E::R8(R8::C),
+            ))),
+            0xca => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B1,
+                R8E::R8(R8::D),
+            ))),
+            0xcb => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B1,
+                R8E::R8(R8::E),
+            ))),
+            0xcc => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B1,
+                R8E::R8(R8::H),
+            ))),
+            0xcd => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B1,
+                R8E::R8(R8::L),
+            ))),
+            0xce => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B1,
+                R8E::HLP,
+            ))),
+            0xcf => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B1,
+                R8E::R8(R8::A),
+            ))),
+
+            0xd0 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B2,
+                R8E::R8(R8::B),
+            ))),
+            0xd1 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B2,
+                R8E::R8(R8::C),
+            ))),
+            0xd2 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B2,
+                R8E::R8(R8::D),
+            ))),
+            0xd3 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B2,
+                R8E::R8(R8::E),
+            ))),
+            0xd4 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B2,
+                R8E::R8(R8::H),
+            ))),
+            0xd5 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B2,
+                R8E::R8(R8::L),
+            ))),
+            0xd6 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B2,
+                R8E::HLP,
+            ))),
+            0xd7 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B2,
+                R8E::R8(R8::A),
+            ))),
+            0xd8 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B3,
+                R8E::R8(R8::B),
+            ))),
+            0xd9 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B3,
+                R8E::R8(R8::C),
+            ))),
+            0xda => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B3,
+                R8E::R8(R8::D),
+            ))),
+            0xdb => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B3,
+                R8E::R8(R8::E),
+            ))),
+            0xdc => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B3,
+                R8E::R8(R8::H),
+            ))),
+            0xdd => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B3,
+                R8E::R8(R8::L),
+            ))),
+            0xde => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B3,
+                R8E::HLP,
+            ))),
+            0xdf => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B3,
+                R8E::R8(R8::A),
+            ))),
+
+            0xe0 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B4,
+                R8E::R8(R8::B),
+            ))),
+            0xe1 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B4,
+                R8E::R8(R8::C),
+            ))),
+            0xe2 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B4,
+                R8E::R8(R8::D),
+            ))),
+            0xe3 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B4,
+                R8E::R8(R8::E),
+            ))),
+            0xe4 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B4,
+                R8E::R8(R8::H),
+            ))),
+            0xe5 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B4,
+                R8E::R8(R8::L),
+            ))),
+            0xe6 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B4,
+                R8E::HLP,
+            ))),
+            0xe7 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B4,
+                R8E::R8(R8::A),
+            ))),
+            0xe8 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B5,
+                R8E::R8(R8::B),
+            ))),
+            0xe9 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B5,
+                R8E::R8(R8::C),
+            ))),
+            0xea => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B5,
+                R8E::R8(R8::D),
+            ))),
+            0xeb => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B5,
+                R8E::R8(R8::E),
+            ))),
+            0xec => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B5,
+                R8E::R8(R8::H),
+            ))),
+            0xed => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B5,
+                R8E::R8(R8::L),
+            ))),
+            0xee => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B5,
+                R8E::HLP,
+            ))),
+            0xef => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B5,
+                R8E::R8(R8::A),
+            ))),
+
+            0xf0 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B6,
+                R8E::R8(R8::B),
+            ))),
+            0xf1 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B6,
+                R8E::R8(R8::C),
+            ))),
+            0xf2 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B6,
+                R8E::R8(R8::D),
+            ))),
+            0xf3 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B6,
+                R8E::R8(R8::E),
+            ))),
+            0xf4 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B6,
+                R8E::R8(R8::H),
+            ))),
+            0xf5 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B6,
+                R8E::R8(R8::L),
+            ))),
+            0xf6 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B6,
+                R8E::HLP,
+            ))),
+            0xf7 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B6,
+                R8E::R8(R8::A),
+            ))),
+            0xf8 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B7,
+                R8E::R8(R8::B),
+            ))),
+            0xf9 => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B7,
+                R8E::R8(R8::C),
+            ))),
+            0xfa => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B7,
+                R8E::R8(R8::D),
+            ))),
+            0xfb => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B7,
+                R8E::R8(R8::E),
+            ))),
+            0xfc => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B7,
+                R8E::R8(R8::H),
+            ))),
+            0xfd => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B7,
+                R8E::R8(R8::L),
+            ))),
+            0xfe => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B7,
+                R8E::HLP,
+            ))),
+            0xff => Some(Instruction::BitFlag(BitFlagInstruction::SET_U3_R8E(
+                U3::B7,
+                R8E::R8(R8::A),
+            ))),
         }
     }
 }
