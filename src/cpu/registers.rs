@@ -1,6 +1,8 @@
+pub const HALF_CARRY_MASK: u8 = 0xF;
+
 // If there's a combination of values of fields which breaks some invariant,
 // than make all fields private and provide a getter.
-pub struct Registers {
+pub struct CpuRegisters {
     pub a: u8,
     pub b: u8,
     pub c: u8,
@@ -15,11 +17,12 @@ pub struct Registers {
 pub struct FlagsRegister {
     pub zero: bool,
     pub subtract: bool,
+    /// true if there is an overflow from the lower nibble (a.k.a the lower four bits).
     pub half_carry: bool,
     pub carry: bool,
 }
 
-impl Registers {
+impl CpuRegisters {
     pub fn new() -> Self {
         Self {
             a: 0,
@@ -114,7 +117,7 @@ mod test {
 
     #[test]
     fn set_bc_test() {
-        let mut reg = Registers::new();
+        let mut reg = CpuRegisters::new();
         reg.set_bc(0xab13);
         assert_eq!(reg.b, 0xab);
         assert_eq!(reg.c, 0x13);

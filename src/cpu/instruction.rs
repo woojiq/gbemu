@@ -6,12 +6,14 @@ Inspired by <https://github.com/rylev/DMG-01/blob/00bed9baedab5548d63d646f60acb7
 */
 pub enum Instruction {
     // Arithmetic instruction
+    /// Add the `ArithmeticTarget` value to register A.
     ADD(ArithmeticTarget),
-    ADDHL(ADDHLTarget),
     ADC(ArithmeticTarget),
     SUB(ArithmeticTarget),
     SBC(ArithmeticTarget),
     CP(ArithmeticTarget),
+
+    ADDHL(ADDHLTarget),
 
     INC(IncDecTarget),
     DEC(IncDecTarget),
@@ -666,7 +668,7 @@ impl Instruction {
             0xc8 => Some(Instruction::RET(JumpTest::Zero)),
             0xc9 => Some(Instruction::RET(JumpTest::Always)),
             0xca => Some(Instruction::JP(JumpTest::Zero)),
-            0xcb => unimplemented!(), // Prefix CB
+            0xcb => panic!("Instruction prefix 0xCB in `from_byte_not_prefixed`."),
             0xcc => Some(Instruction::CALL(JumpTest::Zero)),
             0xcd => Some(Instruction::CALL(JumpTest::Always)),
             0xce => Some(Instruction::ADC(ArithmeticTarget::U8)),
