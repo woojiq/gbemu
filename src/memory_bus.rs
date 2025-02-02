@@ -87,10 +87,15 @@ impl MemoryBus {
             match addr {
                 ECHO_RAM_START..=ECHO_RAM_END => panic!("Use of \"Echo RAM\" memory section."),
                 UNUSED_START..=UNUSED_END => panic!("Use of \"Not Usable\" memory section."),
-                _ => unimplemented!(),
+                _ => todo!(),
             }
         }
         inner(&self, addr.into() as usize)
+    }
+
+    pub fn read_high_byte<T: Into<u8>>(&self, addr: T) -> u8 {
+        let addr = IO_REGISTERS_START as u16 + addr.into() as u16;
+        self.read_byte(addr)
     }
 
     pub fn write_byte<T: Into<u16>>(&self, addr: T, val: u8) {
@@ -98,10 +103,15 @@ impl MemoryBus {
             match addr {
                 ECHO_RAM_START..=ECHO_RAM_END => panic!("Use of \"Echo RAM\" memory section."),
                 UNUSED_START..=UNUSED_END => panic!("Use of \"Not Usable\" memory section."),
-                _ => unimplemented!(),
+                _ => todo!(),
             }
         }
         inner(&self, addr.into() as usize, val)
+    }
+
+    pub fn write_high_byte<T: Into<u8>>(&self, addr: T, val: u8) {
+        let addr = IO_REGISTERS_START as u16 + addr.into() as u16;
+        self.write_byte(addr, val);
     }
 }
 

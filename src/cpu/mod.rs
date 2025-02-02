@@ -56,6 +56,19 @@ impl CPU {
         self.memory.read_byte(self.pc + 1)
     }
 
+    fn read_next_word(&self) -> u16 {
+        // Little-endian
+        let (lo, hi) = (
+            self.memory.read_byte(self.pc + 1),
+            self.memory.read_byte(self.pc + 2),
+        );
+        ((hi as u16) << (u8::BITS as u16)) | (lo as u16)
+    }
+
+    fn read_hl_byte(&self) -> u8 {
+        self.memory.read_byte(self.registers.hl())
+    }
+
     fn execute(&mut self, instruction: Instruction) -> (ProgramCounter, CpuCyclesCount) {
         macro_rules! arithmetic_instruction {
             ($target:ident; $func:ident) => {{
@@ -96,7 +109,7 @@ impl CPU {
 
                     // Bytes: 1; Cycles: 2;
                     instruction::ArithmeticTarget::HLP => {
-                        $var = self.$func(self.memory.read_byte(self.registers.hl()));
+                        $var = self.$func(self.read_hl_byte());
                         (self.pc + 1, CpuCyclesCount(2))
                     }
 
@@ -158,7 +171,7 @@ impl CPU {
 
                     // Bytes: 1; Cycles: 3;
                     instruction::IncDecTarget::HLP => {
-                        let new_val = self.$func_u8(self.memory.read_byte(self.registers.hl()));
+                        let new_val = self.$func_u8(self.read_hl_byte());
                         self.memory.write_byte(self.registers.hl(), new_val);
                         (self.pc + 1, CpuCyclesCount(3))
                     }
@@ -166,6 +179,45 @@ impl CPU {
                     // Bytes: 1; Cycles: 2;
                     instruction::IncDecTarget::SP => {
                         self.sp = self.$func_u16(self.sp as u16) as usize;
+                        (self.pc + 1, CpuCyclesCount(2))
+                    }
+                }
+            };
+        }
+
+        macro_rules! load_byte {
+            ($target:ident, $source:expr) => {
+                match $target {
+                    instruction::LoadByteTarget::A => {
+                        self.registers.a = $source;
+                        (self.pc + 1, CpuCyclesCount(1))
+                    }
+                    instruction::LoadByteTarget::B => {
+                        self.registers.b = $source;
+                        (self.pc + 1, CpuCyclesCount(1))
+                    }
+                    instruction::LoadByteTarget::C => {
+                        self.registers.c = $source;
+                        (self.pc + 1, CpuCyclesCount(1))
+                    }
+                    instruction::LoadByteTarget::D => {
+                        self.registers.d = $source;
+                        (self.pc + 1, CpuCyclesCount(1))
+                    }
+                    instruction::LoadByteTarget::E => {
+                        self.registers.e = $source;
+                        (self.pc + 1, CpuCyclesCount(1))
+                    }
+                    instruction::LoadByteTarget::H => {
+                        self.registers.h = $source;
+                        (self.pc + 1, CpuCyclesCount(1))
+                    }
+                    instruction::LoadByteTarget::L => {
+                        self.registers.l = $source;
+                        (self.pc + 1, CpuCyclesCount(1))
+                    }
+                    instruction::LoadByteTarget::HLP => {
+                        self.memory.write_byte(self.read_hl_byte(), $source);
                         (self.pc + 1, CpuCyclesCount(2))
                     }
                 }
@@ -219,7 +271,115 @@ impl CPU {
                 incdec_instruction!(target; u8: decrement_u8, u16: decrement_u16)
             }
 
-            // TODO: Bitflag instructions
+            Instruction::BIT(pos, target) => match target {
+                instruction::PrefixTarget::A => {
+                    self.check_bit(self.registers.a, pos as u32);
+                    (self.pc + 2, CpuCyclesCount(2))
+                }
+                instruction::PrefixTarget::B => {
+                    self.check_bit(self.registers.b, pos as u32);
+                    (self.pc + 2, CpuCyclesCount(2))
+                }
+                instruction::PrefixTarget::C => {
+                    self.check_bit(self.registers.c, pos as u32);
+                    (self.pc + 2, CpuCyclesCount(2))
+                }
+                instruction::PrefixTarget::D => {
+                    self.check_bit(self.registers.d, pos as u32);
+                    (self.pc + 2, CpuCyclesCount(2))
+                }
+                instruction::PrefixTarget::E => {
+                    self.check_bit(self.registers.e, pos as u32);
+                    (self.pc + 2, CpuCyclesCount(2))
+                }
+                instruction::PrefixTarget::H => {
+                    self.check_bit(self.registers.h, pos as u32);
+                    (self.pc + 2, CpuCyclesCount(2))
+                }
+                instruction::PrefixTarget::L => {
+                    self.check_bit(self.registers.l, pos as u32);
+                    (self.pc + 2, CpuCyclesCount(2))
+                }
+                instruction::PrefixTarget::HLP => {
+                    self.check_bit(self.read_hl_byte(), pos as u32);
+                    (self.pc + 2, CpuCyclesCount(3))
+                }
+            },
+            Instruction::RES(pos, target) => match target {
+                instruction::PrefixTarget::A => {
+                    self.registers.a = self.reset_bit(self.registers.a, pos as u32);
+                    (self.pc + 2, CpuCyclesCount(2))
+                }
+                instruction::PrefixTarget::B => {
+                    self.registers.b = self.reset_bit(self.registers.b, pos as u32);
+                    (self.pc + 2, CpuCyclesCount(2))
+                }
+                instruction::PrefixTarget::C => {
+                    self.registers.c = self.reset_bit(self.registers.c, pos as u32);
+                    (self.pc + 2, CpuCyclesCount(2))
+                }
+                instruction::PrefixTarget::D => {
+                    self.registers.d = self.reset_bit(self.registers.d, pos as u32);
+                    (self.pc + 2, CpuCyclesCount(2))
+                }
+                instruction::PrefixTarget::E => {
+                    self.registers.e = self.reset_bit(self.registers.e, pos as u32);
+                    (self.pc + 2, CpuCyclesCount(2))
+                }
+                instruction::PrefixTarget::H => {
+                    self.registers.h = self.reset_bit(self.registers.h, pos as u32);
+                    (self.pc + 2, CpuCyclesCount(2))
+                }
+                instruction::PrefixTarget::L => {
+                    self.registers.l = self.reset_bit(self.registers.l, pos as u32);
+                    (self.pc + 2, CpuCyclesCount(2))
+                }
+                instruction::PrefixTarget::HLP => {
+                    self.memory.write_byte(
+                        self.registers.hl(),
+                        self.reset_bit(self.read_hl_byte(), pos as u32),
+                    );
+                    (self.pc + 2, CpuCyclesCount(4))
+                }
+            },
+            Instruction::SET(pos, target) => match target {
+                instruction::PrefixTarget::A => {
+                    self.registers.a = self.set_bit(self.registers.a, pos as u32);
+                    (self.pc + 2, CpuCyclesCount(2))
+                }
+                instruction::PrefixTarget::B => {
+                    self.registers.b = self.set_bit(self.registers.b, pos as u32);
+                    (self.pc + 2, CpuCyclesCount(2))
+                }
+                instruction::PrefixTarget::C => {
+                    self.registers.c = self.set_bit(self.registers.c, pos as u32);
+                    (self.pc + 2, CpuCyclesCount(2))
+                }
+                instruction::PrefixTarget::D => {
+                    self.registers.d = self.set_bit(self.registers.d, pos as u32);
+                    (self.pc + 2, CpuCyclesCount(2))
+                }
+                instruction::PrefixTarget::E => {
+                    self.registers.e = self.set_bit(self.registers.e, pos as u32);
+                    (self.pc + 2, CpuCyclesCount(2))
+                }
+                instruction::PrefixTarget::H => {
+                    self.registers.h = self.set_bit(self.registers.h, pos as u32);
+                    (self.pc + 2, CpuCyclesCount(2))
+                }
+                instruction::PrefixTarget::L => {
+                    self.registers.l = self.set_bit(self.registers.l, pos as u32);
+                    (self.pc + 2, CpuCyclesCount(2))
+                }
+                instruction::PrefixTarget::HLP => {
+                    self.memory.write_byte(
+                        self.registers.hl(),
+                        self.set_bit(self.read_hl_byte(), pos as u32),
+                    );
+                    (self.pc + 2, CpuCyclesCount(4))
+                }
+            },
+
             Instruction::CPL => {
                 self.registers.a = self.complement_accum();
                 (self.pc + 1, CpuCyclesCount(1))
@@ -234,9 +394,157 @@ impl CPU {
                 arithmetic_instruction!(target; bitwise_xor => self.registers.a)
             }
 
-            _ => unimplemented!(),
+            Instruction::SCF => {
+                self.set_carry_flag(true);
+                (self.pc + 1, CpuCyclesCount(1))
+            }
+            Instruction::CCF => {
+                self.set_carry_flag(!self.registers.f.carry);
+                (self.pc + 1, CpuCyclesCount(1))
+            }
+
+            #[allow(clippy::self_assignment)]
+            Instruction::Load(load_type) => match load_type {
+                instruction::LoadType::Byte(target, source) => match source {
+                    instruction::LoadByteSource::A => load_byte!(target, self.registers.a),
+                    instruction::LoadByteSource::B => load_byte!(target, self.registers.b),
+                    instruction::LoadByteSource::C => load_byte!(target, self.registers.c),
+                    instruction::LoadByteSource::D => load_byte!(target, self.registers.d),
+                    instruction::LoadByteSource::E => load_byte!(target, self.registers.e),
+                    instruction::LoadByteSource::H => load_byte!(target, self.registers.h),
+                    instruction::LoadByteSource::L => load_byte!(target, self.registers.l),
+
+                    instruction::LoadByteSource::HLP => {
+                        let res = load_byte!(target, self.read_hl_byte());
+                        (res.0, res.1 + CpuCyclesCount(1))
+                    }
+                    instruction::LoadByteSource::U8 => {
+                        let res = load_byte!(target, self.read_next_byte());
+                        (res.0 + 1, res.1 + CpuCyclesCount(1))
+                    }
+                },
+
+                instruction::LoadType::Word(target) => {
+                    let value = self.read_next_word();
+                    match target {
+                        instruction::LoadWordTarget::BC => self.registers.set_bc(value),
+                        instruction::LoadWordTarget::DE => self.registers.set_de(value),
+                        instruction::LoadWordTarget::HL => self.registers.set_hl(value),
+                        instruction::LoadWordTarget::SP => self.sp = value as usize,
+                    }
+                    (self.pc + 3, CpuCyclesCount(3))
+                }
+
+                instruction::LoadType::AFromIndirect(target) => match target {
+                    instruction::IndirectTarget::C => {
+                        self.registers.a = self.memory.read_high_byte(self.registers.c);
+                        (self.pc + 1, CpuCyclesCount(2))
+                    }
+                    instruction::IndirectTarget::U8 => {
+                        self.registers.a = self.memory.read_high_byte(self.read_next_byte());
+                        (self.pc + 2, CpuCyclesCount(3))
+                    }
+                    instruction::IndirectTarget::U16 => {
+                        self.registers.a = self.memory.read_byte(self.read_next_word());
+                        (self.pc + 3, CpuCyclesCount(4))
+                    }
+                    instruction::IndirectTarget::BCP => {
+                        self.registers.a = self.memory.read_byte(self.registers.bc());
+                        (self.pc + 1, CpuCyclesCount(2))
+                    }
+                    instruction::IndirectTarget::DEP => {
+                        self.registers.a = self.memory.read_byte(self.registers.de());
+                        (self.pc + 1, CpuCyclesCount(2))
+                    }
+                    instruction::IndirectTarget::HLI => {
+                        self.registers.a = self.memory.read_byte(self.registers.hl());
+                        self.registers.set_hl(self.registers.hl() + 1);
+                        (self.pc + 1, CpuCyclesCount(2))
+                    }
+                    instruction::IndirectTarget::HLD => {
+                        self.registers.a = self.memory.read_byte(self.registers.hl());
+                        self.registers.set_hl(self.registers.hl() - 1);
+                        (self.pc + 1, CpuCyclesCount(2))
+                    }
+                },
+
+                instruction::LoadType::IndirectFromA(target) => match target {
+                    instruction::IndirectTarget::C => {
+                        self.memory
+                            .write_high_byte(self.registers.c, self.registers.a);
+                        (self.pc + 1, CpuCyclesCount(2))
+                    }
+                    instruction::IndirectTarget::U8 => {
+                        self.memory
+                            .write_high_byte(self.read_next_byte(), self.registers.a);
+                        (self.pc + 2, CpuCyclesCount(3))
+                    }
+                    instruction::IndirectTarget::U16 => {
+                        self.memory
+                            .write_byte(self.read_next_word(), self.registers.a);
+                        (self.pc + 3, CpuCyclesCount(4))
+                    }
+                    instruction::IndirectTarget::BCP => {
+                        self.memory
+                            .write_byte(self.registers.bc(), self.registers.a);
+                        (self.pc + 1, CpuCyclesCount(2))
+                    }
+                    instruction::IndirectTarget::DEP => {
+                        self.memory
+                            .write_byte(self.registers.de(), self.registers.a);
+                        (self.pc + 1, CpuCyclesCount(2))
+                    }
+                    instruction::IndirectTarget::HLI => {
+                        self.memory
+                            .write_byte(self.registers.hl(), self.registers.a);
+                        self.registers.set_hl(self.registers.hl() + 1);
+                        (self.pc + 1, CpuCyclesCount(2))
+                    }
+                    instruction::IndirectTarget::HLD => {
+                        self.memory
+                            .write_byte(self.registers.hl(), self.registers.a);
+                        self.registers.set_hl(self.registers.hl() - 1);
+                        (self.pc + 1, CpuCyclesCount(2))
+                    }
+                },
+
+                instruction::LoadType::IndirectFromSP => {
+                    let addr = self.read_next_word();
+                    // Little-endian
+                    self.memory.write_byte(addr, self.sp as u8);
+                    self.memory
+                        .write_byte(addr + 1, (self.sp >> u8::BITS) as u8);
+                    (self.pc + 3, CpuCyclesCount(5))
+                }
+
+                instruction::LoadType::SPFromHL => {
+                    self.sp = self.registers.hl() as usize;
+                    (self.pc + 1, CpuCyclesCount(2))
+                }
+
+                instruction::LoadType::HLFromSPN => {
+                    // WARN: Maybe read_next_byte() as i8 as i16 as u16?
+                    // Because this value is signed.
+                    let val = self.read_next_byte() as u16;
+                    self.registers.set_hl(val.wrapping_add(self.sp as u16));
+
+                    self.registers.f.zero = false;
+                    self.registers.f.subtract = false;
+                    // Set if overflow from bit 3.
+                    self.registers.f.half_carry = (self.sp as u16 & 0xF) + (val & 0xF) > 0xF;
+                    // Set if overflow from bit 7.
+                    self.registers.f.carry = (self.sp as u16 & 0xFF) + (val & 0xFF) > 0xFF;
+
+                    (self.pc + 2, CpuCyclesCount(3))
+                }
+            },
+
+            // TODO: Bit shift instructions
+            _ => todo!(),
         }
     }
+
+    // https://rgbds.gbdev.io/docs/v0.9.0/gbz80.7
 
     fn add(&mut self, rhs: u8, include_carry: bool) -> u8 {
         let additional = (include_carry & self.registers.f.carry) as u8;
@@ -367,11 +675,39 @@ impl CPU {
     fn decrement_u16(&self, val: u16) -> u16 {
         val.overflowing_add(1).0
     }
+
+    fn check_bit(&mut self, val: u8, bit_pos: u32) {
+        self.registers.f.zero = val.checked_shr(bit_pos).unwrap() & 1 == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = true;
+    }
+
+    fn set_bit(&self, val: u8, bit_pos: u32) -> u8 {
+        val | 1u8.checked_shl(bit_pos).unwrap()
+    }
+
+    fn reset_bit(&self, val: u8, bit_pos: u32) -> u8 {
+        val & !1u8.checked_shl(bit_pos).unwrap()
+    }
+
+    fn set_carry_flag(&mut self, val: bool) {
+        self.registers.f.subtract = false;
+        self.registers.f.carry = val;
+        self.registers.f.half_carry = false;
+    }
 }
 
 impl CpuCyclesCount {
     pub fn get(&self) -> usize {
         self.0
+    }
+}
+
+impl std::ops::Add for CpuCyclesCount {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        CpuCyclesCount(self.0 + rhs.0)
     }
 }
 
@@ -397,6 +733,6 @@ impl std::ops::Add<u16> for ProgramCounter {
     type Output = ProgramCounter;
 
     fn add(self, rhs: u16) -> Self::Output {
-        ProgramCounter(self.0.checked_add(rhs).unwrap())
+        ProgramCounter(self.0 + rhs)
     }
 }

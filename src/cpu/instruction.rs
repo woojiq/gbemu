@@ -80,17 +80,23 @@ pub enum Instruction {
 
 pub enum LoadType {
     Byte(LoadByteTarget, LoadByteSource),
+    /// Copy the value U16 into register R16.
     Word(LoadWordTarget),
     AFromIndirect(IndirectTarget),
     IndirectFromA(IndirectTarget),
+    /// Copy (SP&$FF) at address U16 and (SP>>8) at address U16+1.
     IndirectFromSP,
     SPFromHL,
+    /// Add the signed value e8 to SP and copy the result in HL.
     HLFromSPN,
 }
 
 pub enum IndirectTarget {
+    /// Address $FF00 + C(register).
     C,
+    /// Address $FF00 + U8(next byte).
     U8,
+    /// Address U16(next byte).
     U16,
     BCP,
     DEP,
@@ -203,7 +209,7 @@ pub enum JumpTest {
 
 /// 3-bit unsigned bit index (0 to 7).
 pub enum BitPosition {
-    B0,
+    B0 = 0,
     B1,
     B2,
     B3,
