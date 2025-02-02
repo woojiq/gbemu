@@ -4,3 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+
+[profile.dev]
+overflow-checks = true
+
+[profile.release]
+overflow-checks = true
+
+[profile.test]
+overflow-checks = true
+
+[profile.bench]
+overflow-checks = true
