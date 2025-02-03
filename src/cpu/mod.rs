@@ -8,16 +8,13 @@ use registers::{CpuRegisters, HALF_CARRY_MASK};
 pub struct CPU {
     registers: CpuRegisters,
     memory: MemoryBus,
-    pc: ProgramCounter,
-    // TODO: Custom type too (as ProgramCounter).
+    /// Program counter.
+    pc: u16,
     /// Stack pointer.
-    sp: usize,
+    sp: u16,
 }
 
 pub struct CpuCyclesCount(usize);
-
-#[derive(Copy, Clone)]
-struct ProgramCounter(u16);
 
 impl CPU {
     const INSTRUCTION_PREFIX: u8 = 0xCB;
@@ -26,7 +23,7 @@ impl CPU {
         Self {
             registers: CpuRegisters::new(),
             memory: MemoryBus::new(),
-            pc: ProgramCounter::new(),
+            pc: 0,
             sp: 0,
         }
     }
@@ -69,7 +66,7 @@ impl CPU {
         self.memory.read_byte(self.registers.hl())
     }
 
-    fn execute(&mut self, instruction: Instruction) -> (ProgramCounter, CpuCyclesCount) {
+    fn execute(&mut self, instruction: Instruction) -> (u16, CpuCyclesCount) {
         macro_rules! arithmetic_instruction {
             ($target:ident; $func:ident) => {{
                 let _fake;
@@ -178,7 +175,7 @@ impl CPU {
 
                     // Bytes: 1; Cycles: 2;
                     instruction::IncDecTarget::SP => {
-                        self.sp = self.$func_u16(self.sp as u16) as usize;
+                        self.sp = self.$func_u16(self.sp);
                         (self.pc + 1, CpuCyclesCount(2))
                     }
                 }
@@ -217,7 +214,7 @@ impl CPU {
                         (self.pc + 1, CpuCyclesCount(1))
                     }
                     instruction::LoadByteTarget::HLP => {
-                        self.memory.write_byte(self.read_hl_byte(), $source);
+                        self.memory.write_byte(self.registers.hl(), $source);
                         (self.pc + 1, CpuCyclesCount(2))
                     }
                 }
@@ -258,7 +255,7 @@ impl CPU {
                     (self.pc + 1, CpuCyclesCount(2))
                 }
                 instruction::ADDHLTarget::SP => {
-                    let new_val = self.add_hl(self.sp as u16);
+                    let new_val = self.add_hl(self.sp);
                     self.registers.set_hl(new_val);
                     (self.pc + 1, CpuCyclesCount(2))
                 }
@@ -430,7 +427,7 @@ impl CPU {
                         instruction::LoadWordTarget::BC => self.registers.set_bc(value),
                         instruction::LoadWordTarget::DE => self.registers.set_de(value),
                         instruction::LoadWordTarget::HL => self.registers.set_hl(value),
-                        instruction::LoadWordTarget::SP => self.sp = value as usize,
+                        instruction::LoadWordTarget::SP => self.sp = value,
                     }
                     (self.pc + 3, CpuCyclesCount(3))
                 }
@@ -518,7 +515,7 @@ impl CPU {
                 }
 
                 instruction::LoadType::SPFromHL => {
-                    self.sp = self.registers.hl() as usize;
+                    self.sp = self.registers.hl();
                     (self.pc + 1, CpuCyclesCount(2))
                 }
 
@@ -526,14 +523,14 @@ impl CPU {
                     // WARN: Maybe read_next_byte() as i8 as i16 as u16?
                     // Because this value is signed.
                     let val = self.read_next_byte() as u16;
-                    self.registers.set_hl(val.wrapping_add(self.sp as u16));
+                    self.registers.set_hl(val.wrapping_add(self.sp));
 
                     self.registers.f.zero = false;
                     self.registers.f.subtract = false;
                     // Set if overflow from bit 3.
-                    self.registers.f.half_carry = (self.sp as u16 & 0xF) + (val & 0xF) > 0xF;
+                    self.registers.f.half_carry = (self.sp & 0xF) + (val & 0xF) > 0xF;
                     // Set if overflow from bit 7.
-                    self.registers.f.carry = (self.sp as u16 & 0xFF) + (val & 0xFF) > 0xFF;
+                    self.registers.f.carry = (self.sp & 0xFF) + (val & 0xFF) > 0xFF;
 
                     (self.pc + 2, CpuCyclesCount(3))
                 }
@@ -708,31 +705,5 @@ impl std::ops::Add for CpuCyclesCount {
 
     fn add(self, rhs: Self) -> Self::Output {
         CpuCyclesCount(self.0 + rhs.0)
-    }
-}
-
-impl ProgramCounter {
-    pub fn new() -> Self {
-        Self(0)
-    }
-}
-
-impl From<u16> for ProgramCounter {
-    fn from(pc: u16) -> Self {
-        Self(pc)
-    }
-}
-
-impl From<ProgramCounter> for u16 {
-    fn from(pc: ProgramCounter) -> Self {
-        pc.0
-    }
-}
-
-impl std::ops::Add<u16> for ProgramCounter {
-    type Output = ProgramCounter;
-
-    fn add(self, rhs: u16) -> Self::Output {
-        ProgramCounter(self.0 + rhs)
     }
 }
