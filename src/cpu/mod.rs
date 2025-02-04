@@ -221,6 +221,46 @@ impl CPU {
             };
         }
 
+        macro_rules! bit_shift_instruction {
+            ($target:ident; $func:ident: $($opt:expr),*) => {
+                match $target {
+                    instruction::PrefixTarget::A => {
+                        self.registers.a = self.$func(self.registers.a, $($opt),*);
+                        (self.pc + 2, CpuCyclesCount(2))
+                    }
+                    instruction::PrefixTarget::B => {
+                        self.registers.b = self.$func(self.registers.b, $($opt),*);
+                        (self.pc + 2, CpuCyclesCount(2))
+                    }
+                    instruction::PrefixTarget::C => {
+                        self.registers.c = self.$func(self.registers.c, $($opt),*);
+                        (self.pc + 2, CpuCyclesCount(2))
+                    }
+                    instruction::PrefixTarget::D => {
+                        self.registers.d = self.$func(self.registers.d, $($opt),*);
+                        (self.pc + 2, CpuCyclesCount(2))
+                    }
+                    instruction::PrefixTarget::E => {
+                        self.registers.e = self.$func(self.registers.e, $($opt),*);
+                        (self.pc + 2, CpuCyclesCount(2))
+                    }
+                    instruction::PrefixTarget::H => {
+                        self.registers.h = self.$func(self.registers.h, $($opt),*);
+                        (self.pc + 2, CpuCyclesCount(2))
+                    }
+                    instruction::PrefixTarget::L => {
+                        self.registers.l = self.$func(self.registers.l, $($opt),*);
+                        (self.pc + 2, CpuCyclesCount(2))
+                    }
+                    instruction::PrefixTarget::HLP => {
+                        let new_val = self.$func(self.read_hl_byte(), $($opt),*);
+                        self.memory.write_byte(self.registers.hl(), new_val);
+                        (self.pc + 2, CpuCyclesCount(4))
+                    }
+                }
+            };
+        }
+
         match instruction {
             Instruction::ADD(target) => {
                 arithmetic_instruction!(target; add_without_carry => self.registers.a)
@@ -536,7 +576,33 @@ impl CPU {
                 }
             },
 
-            // TODO: Bit shift instructions
+            Instruction::RL(target) => bit_shift_instruction!(target; rotate_left: true, true),
+            Instruction::RLA => {
+                self.registers.a = self.rotate_left(self.registers.a, true, false);
+                (self.pc + 1, CpuCyclesCount(1))
+            }
+            Instruction::RLC(target) => bit_shift_instruction!(target; rotate_left: false, true),
+            Instruction::RLCA => {
+                self.registers.a = self.rotate_left(self.registers.a, false, false);
+                (self.pc + 1, CpuCyclesCount(1))
+            }
+            Instruction::SLA(target) => bit_shift_instruction!(target; shift_left_arith:),
+
+            Instruction::RR(target) => bit_shift_instruction!(target; rotate_right: true, true),
+            Instruction::RRA => {
+                self.registers.a = self.rotate_right(self.registers.a, true, false);
+                (self.pc + 1, CpuCyclesCount(1))
+            }
+            Instruction::RRC(target) => bit_shift_instruction!(target; rotate_right: false, true),
+            Instruction::RRCA => {
+                self.registers.a = self.rotate_right(self.registers.a, false, false);
+                (self.pc + 1, CpuCyclesCount(1))
+            }
+            Instruction::SRA(target) => bit_shift_instruction!(target; shift_right: true),
+            Instruction::SRL(target) => bit_shift_instruction!(target; shift_right: false),
+
+            Instruction::SWAP(target) => bit_shift_instruction!(target; swap_bits:),
+
             _ => todo!(),
         }
     }
@@ -692,6 +758,76 @@ impl CPU {
         self.registers.f.carry = val;
         self.registers.f.half_carry = false;
     }
+
+    fn rotate_left(&mut self, val: u8, through_carry: bool, set_zero: bool) -> u8 {
+        let res = val.wrapping_shl(1)
+            + if through_carry {
+                val >> (u8::BITS - 1)
+            } else {
+                self.registers.f.carry as u8
+            };
+
+        self.registers.f.zero = set_zero && (res == 0);
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        self.registers.f.carry = val.overflowing_shl(1).1;
+
+        res
+    }
+
+    fn shift_left_arith(&mut self, val: u8) -> u8 {
+        let res = val.wrapping_shl(1);
+
+        self.registers.f.zero = res == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        self.registers.f.carry = val.overflowing_shl(1).1;
+
+        res
+    }
+
+    fn rotate_right(&mut self, val: u8, through_carry: bool, set_zero: bool) -> u8 {
+        let res = (val >> 1)
+            | if through_carry {
+                (self.registers.f.carry as u8) << (u8::BITS - 1)
+            } else {
+                0
+            };
+
+        self.registers.f.zero = set_zero && (res == 0);
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        self.registers.f.carry = val & 1 == 1;
+
+        res
+    }
+
+    /// Shift Right Arithmetically.
+    fn shift_right(&mut self, val: u8, save_msb: bool) -> u8 {
+        let res = (val >> 1)
+            | if save_msb {
+                val & (1 << (u8::BITS - 1))
+            } else {
+                0
+            };
+
+        self.registers.f.zero = res == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        self.registers.f.carry = val & 1 == 1;
+
+        res
+    }
+
+    fn swap_bits(&mut self, val: u8) -> u8 {
+        let res = (val << 4) | (val >> 4);
+        self.registers.f.zero = res == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        self.registers.f.carry = false;
+
+        res
+    }
 }
 
 impl CpuCyclesCount {
@@ -705,5 +841,23 @@ impl std::ops::Add for CpuCyclesCount {
 
     fn add(self, rhs: Self) -> Self::Output {
         CpuCyclesCount(self.0 + rhs.0)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn instruction_swap_bits() {
+        let mut cpu = CPU::new();
+        let mut flag = registers::FlagsRegister::new();
+
+        assert_eq!(cpu.swap_bits(0xFD), 0xDF);
+        assert_eq!(cpu.registers.f, flag);
+
+        assert_eq!(cpu.swap_bits(0x00), 0x00);
+        flag.zero = true;
+        assert_eq!(cpu.registers.f, flag);
     }
 }

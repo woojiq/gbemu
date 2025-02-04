@@ -38,17 +38,20 @@ pub enum Instruction {
 
     // Bit shift instructions
     RL(PrefixTarget),
+    RLA,
     RLC(PrefixTarget),
+    RLCA,
+
     RR(PrefixTarget),
+    RRA,
     RRC(PrefixTarget),
+    RRCA,
+
     SLA(PrefixTarget),
     SRA(PrefixTarget),
     SRL(PrefixTarget),
+
     SWAP(PrefixTarget),
-    RLA,
-    RLCA,
-    RRA,
-    RRCA,
 
     // Jumps and subroutine instructions
     JR(JumpTest),
