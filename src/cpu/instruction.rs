@@ -201,7 +201,23 @@ pub enum VEC {
     X38,
 }
 
+impl VEC {
+    pub fn to_addr(&self) -> u16 {
+        match *self {
+            VEC::X00 => 0x00,
+            VEC::X08 => 0x08,
+            VEC::X10 => 0x10,
+            VEC::X18 => 0x18,
+            VEC::X20 => 0x20,
+            VEC::X28 => 0x28,
+            VEC::X30 => 0x30,
+            VEC::X38 => 0x38,
+        }
+    }
+}
+
 /// A condition code.
+#[derive(Copy, Clone)]
 pub enum JumpTest {
     Zero,
     NotZero,

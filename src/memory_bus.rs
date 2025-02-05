@@ -59,12 +59,20 @@ pub struct MemoryBus {
     io_registers: IoRegisters,
     /// Hight RAM.
     hram: [u8; HIGH_RAM_AREA_SIZE],
-    interrupt_enable: InterruptEnableRegister,
+    interrupt_enable: InterruptFlags,
+    interrupt_flag: InterruptFlags,
 }
 
 pub struct IoRegisters {}
 
-pub struct InterruptEnableRegister {}
+#[derive(Copy, Clone)]
+pub struct InterruptFlags {
+    vbank: bool,
+    lcd: bool,
+    timer: bool,
+    serial: bool,
+    joypad: bool,
+}
 
 impl MemoryBus {
     pub fn new() -> Self {
@@ -78,8 +86,13 @@ impl MemoryBus {
             oam: [0; OAM_SIZE],
             io_registers: IoRegisters::new(),
             hram: [0; HIGH_RAM_AREA_SIZE],
-            interrupt_enable: InterruptEnableRegister::new(),
+            interrupt_enable: InterruptFlags::new(),
+            interrupt_flag: InterruptFlags::new(),
         }
+    }
+
+    pub fn has_interrupt(&self) -> bool {
+        (self.interrupt_enable & self.interrupt_flag).any_interrupt()
     }
 
     pub fn read_byte(&self, addr: u16) -> u8 {
@@ -115,8 +128,32 @@ impl IoRegisters {
     }
 }
 
-impl InterruptEnableRegister {
+impl InterruptFlags {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            vbank: false,
+            lcd: false,
+            timer: false,
+            serial: false,
+            joypad: false,
+        }
+    }
+
+    pub fn any_interrupt(&self) -> bool {
+        self.vbank || self.lcd || self.timer || self.serial || self.joypad
+    }
+}
+
+impl std::ops::BitAnd for InterruptFlags {
+    type Output = Self;
+
+    fn bitand(self, rhs: Self) -> Self::Output {
+        Self::Output {
+            vbank: self.vbank & rhs.vbank,
+            lcd: self.lcd & rhs.lcd,
+            timer: self.timer & rhs.timer,
+            serial: self.serial & rhs.serial,
+            joypad: self.joypad & rhs.joypad,
+        }
     }
 }
