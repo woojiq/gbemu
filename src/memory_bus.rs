@@ -45,7 +45,7 @@ const HIGH_RAM_AREA_START: u16 = 0xFF80;
 const HIGH_RAM_AREA_END: u16 = 0xFFFE;
 const HIGH_RAM_AREA_SIZE: usize = (HIGH_RAM_AREA_END - HIGH_RAM_AREA_START + 1) as usize;
 
-const INTERRUPT_ENABLED_REGISTER: usize = 0xFFFF;
+const INTERRUPT_ENABLED_REGISTER: u16 = 0xFFFF;
 
 pub struct MemoryBus {
     boot_rom: [u8; BOOT_ROM_SIZE],
@@ -56,14 +56,62 @@ pub struct MemoryBus {
     /// Working RAM.
     wram: [u8; WORKING_RAM_SIZE],
     oam: [u8; OAM_SIZE],
-    io_registers: IoRegisters,
-    /// Hight RAM.
-    hram: [u8; HIGH_RAM_AREA_SIZE],
+
+    // IO registers:
     interrupt_enable: InterruptFlags,
     interrupt_flag: InterruptFlags,
+    joypad: Joypad,
+    // TODO: Increment divider and timer.
+    divider: Timer,
+    timer: Timer,
+
+    /// Hight RAM.
+    hram: [u8; HIGH_RAM_AREA_SIZE],
 }
 
-pub struct IoRegisters {}
+#[derive(Copy, Clone)]
+pub struct Joypad {
+    mode: JoypadMode,
+    down: bool,
+    up: bool,
+    left: bool,
+    right: bool,
+    start: bool,
+    select: bool,
+    b: bool,
+    a: bool,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum JoypadMode {
+    // Down, Up, Left, Right
+    Dpad,
+    // Start, Select, B, A
+    Buttons,
+    // QUESTION: Do we really need `None`?
+    None,
+}
+
+#[derive(Copy, Clone, Default)]
+enum TimerRateHz {
+    #[default]
+    F4096,
+    F262144,
+    F65536,
+    F16384,
+}
+
+// TODO
+#[derive(Copy, Clone, Default)]
+pub struct Timer {
+    freq: TimerRateHz,
+    cycles: usize,
+    pub val: u8,
+    /// When TIMA overflows, it is reset to the value in this register and an
+    /// interrupt is requested.
+    pub modulo: u8,
+    pub enable: bool,
+}
 
 #[derive(Copy, Clone)]
 pub struct InterruptFlags {
@@ -84,22 +132,51 @@ impl MemoryBus {
             external_ram: [0; EXTERNAL_RAM_SIZE],
             wram: [0; WORKING_RAM_SIZE],
             oam: [0; OAM_SIZE],
-            io_registers: IoRegisters::new(),
-            hram: [0; HIGH_RAM_AREA_SIZE],
+
+            joypad: Joypad::new(),
+            divider: Timer::new(TimerRateHz::F16384),
+            timer: Timer::default(),
             interrupt_enable: InterruptFlags::new(),
             interrupt_flag: InterruptFlags::new(),
+
+            hram: [0; HIGH_RAM_AREA_SIZE],
+        }
+    }
+
+    pub fn step(&mut self, cycles: usize) {
+        self.divider.step(cycles);
+
+        if self.timer.step(cycles) {
+            self.interrupt_flag.timer = true;
         }
     }
 
     pub fn has_interrupt(&self) -> bool {
-        (self.interrupt_enable & self.interrupt_flag).any_interrupt()
+        u8::from(self.interrupt_enable) & u8::from(self.interrupt_flag) != 0
     }
 
     pub fn read_byte(&self, addr: u16) -> u8 {
         match addr {
-            ECHO_RAM_START..=ECHO_RAM_END => panic!("Use of \"Echo RAM\" memory section."),
-            UNUSED_START..=UNUSED_END => panic!("Use of \"Not Usable\" memory section."),
-            _ => todo!(),
+            BOOT_ROM_START..=BOOT_ROM_END => self.boot_rom[(addr - BOOT_ROM_START) as usize],
+            ROM_BANK_0_START..=ROM_BANK_0_END => {
+                self.rom_bank_0[(addr - ROM_BANK_0_START) as usize]
+            }
+            ROM_BANK_N_START..=ROM_BANK_N_END => {
+                self.rom_bank_0[(addr - ROM_BANK_N_START) as usize]
+            }
+            VIDEO_RAM_START..=VIDEO_RAM_END => self.vram[(addr - VIDEO_RAM_START) as usize],
+            EXTERNAL_RAM_START..=EXTERNAL_RAM_END => {
+                self.external_ram[(addr - EXTERNAL_RAM_START) as usize]
+            }
+            WORKING_RAM_START..=WORKING_RAM_END => self.wram[(addr - WORKING_RAM_START) as usize],
+            ECHO_RAM_START..=ECHO_RAM_END => panic!(r#"Use of "Echo RAM" memory section."#),
+            OAM_START..=OAM_END => self.oam[(addr - OAM_START) as usize],
+            UNUSED_START..=UNUSED_END => panic!(r#"Use of "Not Usable" memory section."#),
+            IO_REGISTERS_START..=IO_REGISTERS_END => self.read_io_register(addr),
+            HIGH_RAM_AREA_START..=HIGH_RAM_AREA_END => {
+                self.hram[(addr - HIGH_RAM_AREA_START) as usize]
+            }
+            INTERRUPT_ENABLED_REGISTER => u8::from(self.interrupt_enable),
         }
     }
 
@@ -108,23 +185,203 @@ impl MemoryBus {
         self.read_byte(addr)
     }
 
-    pub fn write_byte(&self, addr: u16, val: u8) {
+    // TODO
+    pub fn write_byte(&mut self, addr: u16, val: u8) {
         match addr {
-            ECHO_RAM_START..=ECHO_RAM_END => panic!("Use of \"Echo RAM\" memory section."),
-            UNUSED_START..=UNUSED_END => panic!("Use of \"Not Usable\" memory section."),
-            _ => todo!(),
+            BOOT_ROM_START..=BOOT_ROM_END => panic!("Boot ROM cannot be overwritten."),
+            ROM_BANK_0_START..=ROM_BANK_0_END => {
+                self.rom_bank_0[(addr - ROM_BANK_0_START) as usize] = val
+            }
+            ROM_BANK_N_START..=ROM_BANK_N_END => {
+                self.rom_bank_0[(addr - ROM_BANK_N_START) as usize] = val
+            }
+            VIDEO_RAM_START..=VIDEO_RAM_END => self.vram[(addr - VIDEO_RAM_START) as usize] = val,
+            EXTERNAL_RAM_START..=EXTERNAL_RAM_END => {
+                self.external_ram[(addr - EXTERNAL_RAM_START) as usize] = val
+            }
+            WORKING_RAM_START..=WORKING_RAM_END => {
+                self.wram[(addr - WORKING_RAM_START) as usize] = val
+            }
+            ECHO_RAM_START..=ECHO_RAM_END => panic!(r#"Use of "Echo RAM" memory section."#),
+            OAM_START..=OAM_END => self.oam[(addr - OAM_START) as usize] = val,
+            UNUSED_START..=UNUSED_END => panic!(r#"Use of "Not Usable" memory section."#),
+            IO_REGISTERS_START..=IO_REGISTERS_END => self.write_io_register(addr, val),
+            HIGH_RAM_AREA_START..=HIGH_RAM_AREA_END => {
+                self.hram[(addr - HIGH_RAM_AREA_START) as usize] = val
+            }
+            INTERRUPT_ENABLED_REGISTER => self.interrupt_enable = InterruptFlags::from(val),
         }
     }
 
-    pub fn write_high_byte(&self, addr: u8, val: u8) {
+    pub fn write_high_byte(&mut self, addr: u8, val: u8) {
         let addr = IO_REGISTERS_START as u16 + addr as u16;
         self.write_byte(addr, val);
     }
+
+    // https://gbdev.io/pandocs/Memory_Map.html#io-ranges
+    // TODO
+    fn read_io_register(&self, addr: u16) -> u8 {
+        assert!((IO_REGISTERS_START..=IO_REGISTERS_END).contains(&addr));
+
+        match addr {
+            0xFF00 => u8::from(self.joypad),
+            0xFF01..=0xFF02 => unimplemented!("Serial Transfer"),
+            0xFF04 => self.divider.val,
+            0xFF05 => self.timer.val,
+            0xFF06 => self.timer.modulo,
+            0xFF07 => {
+                (match self.timer.freq {
+                    TimerRateHz::F4096 => 0,
+                    TimerRateHz::F262144 => 1,
+                    TimerRateHz::F65536 => 2,
+                    TimerRateHz::F16384 => 3,
+                }) | ((self.timer.enable as u8) << 2)
+            }
+            0xFF0F => u8::from(self.interrupt_flag),
+            0xFF10..=0xFF26 => unimplemented!("Audio registers are not supported yet."),
+            0xFF30..=0xFF3F => unimplemented!("Wave pattern registers are not supported yet."),
+            _ => unimplemented!(),
+        }
+    }
+
+    // TODO
+    fn write_io_register(&mut self, addr: u16, val: u8) {
+        assert!((IO_REGISTERS_START..=IO_REGISTERS_END).contains(&addr));
+
+        match addr {
+            0xFF00 => self.joypad.set_mode(val),
+            0xFF01..=0xFF02 => unimplemented!("Serial Transfer"),
+            0xFF04 => self.divider.val = 0,
+            0xFF05 => self.timer.val = val,
+            0xFF06 => self.timer.modulo = val,
+            0xFF07 => {
+                self.timer.freq = match val & 0b11 {
+                    0 => TimerRateHz::F4096,
+                    1 => TimerRateHz::F262144,
+                    2 => TimerRateHz::F65536,
+                    3 => TimerRateHz::F16384,
+                    _ => panic!("Unknown timer frequency rate {}", val & 0b11),
+                };
+                self.timer.enable = val & (1 << 2) != 0;
+            }
+            0xFF0F => self.interrupt_flag = InterruptFlags::from(val),
+            _ => panic!("Cannot write to memory location 0x{addr:X}"),
+        }
+    }
 }
 
-impl IoRegisters {
+impl Joypad {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            mode: JoypadMode::None,
+            down: false,
+            up: false,
+            left: false,
+            right: false,
+            start: false,
+            select: false,
+            b: false,
+            a: false,
+        }
+    }
+
+    pub fn set_mode(&mut self, val: u8) {
+        if val == 0x20 {
+            self.mode = JoypadMode::Dpad;
+        } else if val == 0x30 {
+            self.mode = JoypadMode::Buttons;
+        } else {
+            panic!("Only 4-5th bits can be written to joypad register.");
+        }
+    }
+
+    fn is_dpad(&self) -> bool {
+        self.mode == JoypadMode::Dpad
+    }
+
+    fn is_buttons(&self) -> bool {
+        self.mode == JoypadMode::Buttons
+    }
+
+    fn bit0(&self) -> bool {
+        (self.a && self.is_buttons()) || (self.right && self.is_dpad())
+    }
+
+    fn bit1(&self) -> bool {
+        (self.b && self.is_buttons()) || (self.left && self.is_dpad())
+    }
+
+    fn bit2(&self) -> bool {
+        (self.select && self.is_buttons()) || (self.up && self.is_dpad())
+    }
+
+    fn bit3(&self) -> bool {
+        (self.start && self.is_buttons()) || (self.down && self.is_dpad())
+    }
+}
+
+impl From<Joypad> for u8 {
+    fn from(v: Joypad) -> Self {
+        (v.bit0() as u8)
+            | ((v.bit1() as u8) << 1)
+            | ((v.bit2() as u8) << 2)
+            | ((v.bit3() as u8) << 3)
+            | ((v.is_dpad() as u8) << 4)
+            | ((v.is_buttons() as u8) << 5)
+    }
+}
+
+impl TimerRateHz {
+    pub const fn per_cpu_cycle(&self) -> usize {
+        use crate::cpu::CPU_FREQ;
+        match self {
+            TimerRateHz::F4096 => CPU_FREQ / 4096,
+            TimerRateHz::F262144 => CPU_FREQ / 262144,
+            TimerRateHz::F65536 => CPU_FREQ / 65536,
+            TimerRateHz::F16384 => CPU_FREQ / 16384,
+        }
+    }
+}
+
+impl Timer {
+    pub fn new(freq: TimerRateHz) -> Self {
+        Self {
+            freq,
+            cycles: 0,
+            val: 0,
+            modulo: 0,
+            enable: true,
+        }
+    }
+
+    /// # Returns
+    ///
+    /// Whether overflow occurs.
+    pub fn step(&mut self, cpu_cycles: usize) -> bool {
+        if !self.enable {
+            return false;
+        }
+
+        self.cycles += cpu_cycles;
+
+        let overflow = if self.cycles > self.freq.per_cpu_cycle() {
+            let (new_val, overflow) = self
+                .val
+                .overflowing_add(u8::try_from(self.cycles / self.freq.per_cpu_cycle()).unwrap());
+
+            self.cycles %= self.freq.per_cpu_cycle();
+            self.val = new_val;
+
+            overflow
+        } else {
+            false
+        };
+
+        if overflow {
+            self.val = self.modulo;
+        }
+
+        overflow
     }
 }
 
@@ -138,9 +395,27 @@ impl InterruptFlags {
             joypad: false,
         }
     }
+}
 
-    pub fn any_interrupt(&self) -> bool {
-        self.vbank || self.lcd || self.timer || self.serial || self.joypad
+impl From<InterruptFlags> for u8 {
+    fn from(v: InterruptFlags) -> Self {
+        ((v.joypad as u8) << 4)
+            | ((v.serial as u8) << 3)
+            | ((v.timer as u8) << 2)
+            | ((v.lcd as u8) << 1)
+            | (v.vbank as u8)
+    }
+}
+
+impl From<u8> for InterruptFlags {
+    fn from(v: u8) -> Self {
+        Self {
+            vbank: (v >> 0) & 1 == 1,
+            lcd: (v >> 1) & 1 == 1,
+            timer: (v >> 2) & 1 == 1,
+            serial: (v >> 3) & 1 == 1,
+            joypad: (v >> 4) & 1 == 1,
+        }
     }
 }
 

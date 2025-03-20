@@ -5,6 +5,8 @@ use crate::memory_bus::MemoryBus;
 use instruction::Instruction;
 use registers::{CpuRegisters, HALF_CARRY_MASK};
 
+pub const CPU_FREQ: usize = 4194304;
+
 pub struct CPU {
     registers: CpuRegisters,
     memory: MemoryBus,
@@ -15,8 +17,6 @@ pub struct CPU {
     is_halted: bool,
     interrupts_enabled: bool,
 }
-
-pub struct CpuCyclesCount(usize);
 
 impl CPU {
     const INSTRUCTION_PREFIX: u8 = 0xCB;
@@ -32,11 +32,12 @@ impl CPU {
         }
     }
 
-    pub fn cycle(&mut self) -> CpuCyclesCount {
+    pub fn cycle(&mut self) {
         let instruction = self.get_current_instruction();
-        let res = self.execute(instruction);
-        self.pc = res.0;
-        res.1
+        let (new_pc, cycles) = self.execute(instruction);
+
+        self.pc = new_pc;
+        self.memory.step(cycles);
     }
 
     fn get_current_instruction(&self) -> Instruction {
@@ -70,7 +71,7 @@ impl CPU {
         self.memory.read_byte(self.registers.hl())
     }
 
-    fn execute(&mut self, instruction: Instruction) -> (u16, CpuCyclesCount) {
+    fn execute(&mut self, instruction: Instruction) -> (u16, usize) {
         macro_rules! arithmetic_instruction {
             ($target:ident; $func:ident) => {{
                 let _fake;
@@ -81,43 +82,43 @@ impl CPU {
                     // Bytes: 1; Cycles: 1;
                     instruction::ArithmeticTarget::A => {
                         $var = self.$func(self.registers.a);
-                        (self.pc.wrapping_add( 1), CpuCyclesCount(1))
+                        (self.pc.wrapping_add( 1), 1)
                     }
                     instruction::ArithmeticTarget::B => {
                         $var = self.$func(self.registers.b);
-                        (self.pc.wrapping_add( 1), CpuCyclesCount(1))
+                        (self.pc.wrapping_add( 1), 1)
                     }
                     instruction::ArithmeticTarget::C => {
                         $var = self.$func(self.registers.c);
-                        (self.pc.wrapping_add( 1), CpuCyclesCount(1))
+                        (self.pc.wrapping_add( 1), 1)
                     }
                     instruction::ArithmeticTarget::D => {
                         $var = self.$func(self.registers.d);
-                        (self.pc.wrapping_add( 1), CpuCyclesCount(1))
+                        (self.pc.wrapping_add( 1), 1)
                     }
                     instruction::ArithmeticTarget::E => {
                         $var = self.$func(self.registers.e);
-                        (self.pc.wrapping_add( 1), CpuCyclesCount(1))
+                        (self.pc.wrapping_add( 1), 1)
                     }
                     instruction::ArithmeticTarget::H => {
                         $var = self.$func(self.registers.h);
-                        (self.pc.wrapping_add( 1), CpuCyclesCount(1))
+                        (self.pc.wrapping_add( 1), 1)
                     }
                     instruction::ArithmeticTarget::L => {
                         $var = self.$func(self.registers.l);
-                        (self.pc.wrapping_add( 1), CpuCyclesCount(1))
+                        (self.pc.wrapping_add( 1), 1)
                     }
 
                     // Bytes: 1; Cycles: 2;
                     instruction::ArithmeticTarget::HLP => {
                         $var = self.$func(self.read_hl_byte());
-                        (self.pc.wrapping_add( 1), CpuCyclesCount(2))
+                        (self.pc.wrapping_add( 1), 2)
                     }
 
                     // Bytes: 2; Cycles: 2;
                     instruction::ArithmeticTarget::U8 => {
                         $var = self.$func(self.read_next_byte());
-                        (self.pc.wrapping_add( 2), CpuCyclesCount(2))
+                        (self.pc.wrapping_add( 2), 2)
                     }
                 }
             };
@@ -129,58 +130,58 @@ impl CPU {
                     // Bytes: 1; Cycles: 1;
                     instruction::IncDecTarget::A => {
                         self.registers.a = self.$func_u8(self.registers.a);
-                        (self.pc.wrapping_add(1), CpuCyclesCount(1))
+                        (self.pc.wrapping_add(1), 1)
                     }
                     instruction::IncDecTarget::B => {
                         self.registers.b = self.$func_u8(self.registers.b);
-                        (self.pc.wrapping_add(1), CpuCyclesCount(1))
+                        (self.pc.wrapping_add(1), 1)
                     }
                     instruction::IncDecTarget::C => {
                         self.registers.c = self.$func_u8(self.registers.c);
-                        (self.pc.wrapping_add(1), CpuCyclesCount(1))
+                        (self.pc.wrapping_add(1), 1)
                     }
                     instruction::IncDecTarget::D => {
                         self.registers.d = self.$func_u8(self.registers.d);
-                        (self.pc.wrapping_add(1), CpuCyclesCount(1))
+                        (self.pc.wrapping_add(1), 1)
                     }
                     instruction::IncDecTarget::E => {
                         self.registers.e = self.$func_u8(self.registers.e);
-                        (self.pc.wrapping_add(1), CpuCyclesCount(1))
+                        (self.pc.wrapping_add(1), 1)
                     }
                     instruction::IncDecTarget::H => {
                         self.registers.h = self.$func_u8(self.registers.h);
-                        (self.pc.wrapping_add(1), CpuCyclesCount(1))
+                        (self.pc.wrapping_add(1), 1)
                     }
                     instruction::IncDecTarget::L => {
                         self.registers.l = self.$func_u8(self.registers.l);
-                        (self.pc.wrapping_add(1), CpuCyclesCount(1))
+                        (self.pc.wrapping_add(1), 1)
                     }
 
                     // Bytes: 1; Cycles: 2;
                     instruction::IncDecTarget::BC => {
                         self.registers.set_bc(self.$func_u16(self.registers.bc()));
-                        (self.pc.wrapping_add(1), CpuCyclesCount(2))
+                        (self.pc.wrapping_add(1), 2)
                     }
                     instruction::IncDecTarget::DE => {
                         self.registers.set_de(self.$func_u16(self.registers.de()));
-                        (self.pc.wrapping_add(1), CpuCyclesCount(2))
+                        (self.pc.wrapping_add(1), 2)
                     }
                     instruction::IncDecTarget::HL => {
                         self.registers.set_hl(self.$func_u16(self.registers.hl()));
-                        (self.pc.wrapping_add(1), CpuCyclesCount(2))
+                        (self.pc.wrapping_add(1), 2)
                     }
 
                     // Bytes: 1; Cycles: 3;
                     instruction::IncDecTarget::HLP => {
                         let new_val = self.$func_u8(self.read_hl_byte());
                         self.memory.write_byte(self.registers.hl(), new_val);
-                        (self.pc.wrapping_add(1), CpuCyclesCount(3))
+                        (self.pc.wrapping_add(1), 3)
                     }
 
                     // Bytes: 1; Cycles: 2;
                     instruction::IncDecTarget::SP => {
                         self.sp = self.$func_u16(self.sp);
-                        (self.pc.wrapping_add(1), CpuCyclesCount(2))
+                        (self.pc.wrapping_add(1), 2)
                     }
                 }
             };
@@ -191,35 +192,35 @@ impl CPU {
                 match $target {
                     instruction::LoadByteTarget::A => {
                         self.registers.a = $source;
-                        (self.pc.wrapping_add(1), CpuCyclesCount(1))
+                        (self.pc.wrapping_add(1), 1)
                     }
                     instruction::LoadByteTarget::B => {
                         self.registers.b = $source;
-                        (self.pc.wrapping_add(1), CpuCyclesCount(1))
+                        (self.pc.wrapping_add(1), 1)
                     }
                     instruction::LoadByteTarget::C => {
                         self.registers.c = $source;
-                        (self.pc.wrapping_add(1), CpuCyclesCount(1))
+                        (self.pc.wrapping_add(1), 1)
                     }
                     instruction::LoadByteTarget::D => {
                         self.registers.d = $source;
-                        (self.pc.wrapping_add(1), CpuCyclesCount(1))
+                        (self.pc.wrapping_add(1), 1)
                     }
                     instruction::LoadByteTarget::E => {
                         self.registers.e = $source;
-                        (self.pc.wrapping_add(1), CpuCyclesCount(1))
+                        (self.pc.wrapping_add(1), 1)
                     }
                     instruction::LoadByteTarget::H => {
                         self.registers.h = $source;
-                        (self.pc.wrapping_add(1), CpuCyclesCount(1))
+                        (self.pc.wrapping_add(1), 1)
                     }
                     instruction::LoadByteTarget::L => {
                         self.registers.l = $source;
-                        (self.pc.wrapping_add(1), CpuCyclesCount(1))
+                        (self.pc.wrapping_add(1), 1)
                     }
                     instruction::LoadByteTarget::HLP => {
                         self.memory.write_byte(self.registers.hl(), $source);
-                        (self.pc.wrapping_add(1), CpuCyclesCount(2))
+                        (self.pc.wrapping_add(1), 2)
                     }
                 }
             };
@@ -230,36 +231,36 @@ impl CPU {
                 match $target {
                     instruction::PrefixTarget::A => {
                         self.registers.a = self.$func(self.registers.a, $($opt),*);
-                        (self.pc.wrapping_add( 2), CpuCyclesCount(2))
+                        (self.pc.wrapping_add( 2), 2)
                     }
                     instruction::PrefixTarget::B => {
                         self.registers.b = self.$func(self.registers.b, $($opt),*);
-                        (self.pc.wrapping_add( 2), CpuCyclesCount(2))
+                        (self.pc.wrapping_add( 2), 2)
                     }
                     instruction::PrefixTarget::C => {
                         self.registers.c = self.$func(self.registers.c, $($opt),*);
-                        (self.pc.wrapping_add( 2), CpuCyclesCount(2))
+                        (self.pc.wrapping_add( 2), 2)
                     }
                     instruction::PrefixTarget::D => {
                         self.registers.d = self.$func(self.registers.d, $($opt),*);
-                        (self.pc.wrapping_add( 2), CpuCyclesCount(2))
+                        (self.pc.wrapping_add( 2), 2)
                     }
                     instruction::PrefixTarget::E => {
                         self.registers.e = self.$func(self.registers.e, $($opt),*);
-                        (self.pc.wrapping_add( 2), CpuCyclesCount(2))
+                        (self.pc.wrapping_add( 2), 2)
                     }
                     instruction::PrefixTarget::H => {
                         self.registers.h = self.$func(self.registers.h, $($opt),*);
-                        (self.pc.wrapping_add( 2), CpuCyclesCount(2))
+                        (self.pc.wrapping_add( 2), 2)
                     }
                     instruction::PrefixTarget::L => {
                         self.registers.l = self.$func(self.registers.l, $($opt),*);
-                        (self.pc.wrapping_add( 2), CpuCyclesCount(2))
+                        (self.pc.wrapping_add( 2), 2)
                     }
                     instruction::PrefixTarget::HLP => {
                         let new_val = self.$func(self.read_hl_byte(), $($opt),*);
                         self.memory.write_byte(self.registers.hl(), new_val);
-                        (self.pc.wrapping_add( 2), CpuCyclesCount(4))
+                        (self.pc.wrapping_add( 2), 4)
                     }
                 }
             };
@@ -286,22 +287,22 @@ impl CPU {
                 instruction::ADDHLTarget::BC => {
                     let new_val = self.add_hl(self.registers.bc());
                     self.registers.set_hl(new_val);
-                    (self.pc.wrapping_add(1), CpuCyclesCount(2))
+                    (self.pc.wrapping_add(1), 2)
                 }
                 instruction::ADDHLTarget::DE => {
                     let new_val = self.add_hl(self.registers.de());
                     self.registers.set_hl(new_val);
-                    (self.pc.wrapping_add(1), CpuCyclesCount(2))
+                    (self.pc.wrapping_add(1), 2)
                 }
                 instruction::ADDHLTarget::HL => {
                     let new_val = self.add_hl(self.registers.hl());
                     self.registers.set_hl(new_val);
-                    (self.pc.wrapping_add(1), CpuCyclesCount(2))
+                    (self.pc.wrapping_add(1), 2)
                 }
                 instruction::ADDHLTarget::SP => {
                     let new_val = self.add_hl(self.sp);
                     self.registers.set_hl(new_val);
-                    (self.pc.wrapping_add(1), CpuCyclesCount(2))
+                    (self.pc.wrapping_add(1), 2)
                 }
             },
 
@@ -315,115 +316,115 @@ impl CPU {
             Instruction::BIT(pos, target) => match target {
                 instruction::PrefixTarget::A => {
                     self.check_bit(self.registers.a, pos as u32);
-                    (self.pc.wrapping_add(2), CpuCyclesCount(2))
+                    (self.pc.wrapping_add(2), 2)
                 }
                 instruction::PrefixTarget::B => {
                     self.check_bit(self.registers.b, pos as u32);
-                    (self.pc.wrapping_add(2), CpuCyclesCount(2))
+                    (self.pc.wrapping_add(2), 2)
                 }
                 instruction::PrefixTarget::C => {
                     self.check_bit(self.registers.c, pos as u32);
-                    (self.pc.wrapping_add(2), CpuCyclesCount(2))
+                    (self.pc.wrapping_add(2), 2)
                 }
                 instruction::PrefixTarget::D => {
                     self.check_bit(self.registers.d, pos as u32);
-                    (self.pc.wrapping_add(2), CpuCyclesCount(2))
+                    (self.pc.wrapping_add(2), 2)
                 }
                 instruction::PrefixTarget::E => {
                     self.check_bit(self.registers.e, pos as u32);
-                    (self.pc.wrapping_add(2), CpuCyclesCount(2))
+                    (self.pc.wrapping_add(2), 2)
                 }
                 instruction::PrefixTarget::H => {
                     self.check_bit(self.registers.h, pos as u32);
-                    (self.pc.wrapping_add(2), CpuCyclesCount(2))
+                    (self.pc.wrapping_add(2), 2)
                 }
                 instruction::PrefixTarget::L => {
                     self.check_bit(self.registers.l, pos as u32);
-                    (self.pc.wrapping_add(2), CpuCyclesCount(2))
+                    (self.pc.wrapping_add(2), 2)
                 }
                 instruction::PrefixTarget::HLP => {
                     self.check_bit(self.read_hl_byte(), pos as u32);
-                    (self.pc.wrapping_add(2), CpuCyclesCount(3))
+                    (self.pc.wrapping_add(2), 3)
                 }
             },
             Instruction::RES(pos, target) => match target {
                 instruction::PrefixTarget::A => {
                     self.registers.a = self.reset_bit(self.registers.a, pos as u32);
-                    (self.pc.wrapping_add(2), CpuCyclesCount(2))
+                    (self.pc.wrapping_add(2), 2)
                 }
                 instruction::PrefixTarget::B => {
                     self.registers.b = self.reset_bit(self.registers.b, pos as u32);
-                    (self.pc.wrapping_add(2), CpuCyclesCount(2))
+                    (self.pc.wrapping_add(2), 2)
                 }
                 instruction::PrefixTarget::C => {
                     self.registers.c = self.reset_bit(self.registers.c, pos as u32);
-                    (self.pc.wrapping_add(2), CpuCyclesCount(2))
+                    (self.pc.wrapping_add(2), 2)
                 }
                 instruction::PrefixTarget::D => {
                     self.registers.d = self.reset_bit(self.registers.d, pos as u32);
-                    (self.pc.wrapping_add(2), CpuCyclesCount(2))
+                    (self.pc.wrapping_add(2), 2)
                 }
                 instruction::PrefixTarget::E => {
                     self.registers.e = self.reset_bit(self.registers.e, pos as u32);
-                    (self.pc.wrapping_add(2), CpuCyclesCount(2))
+                    (self.pc.wrapping_add(2), 2)
                 }
                 instruction::PrefixTarget::H => {
                     self.registers.h = self.reset_bit(self.registers.h, pos as u32);
-                    (self.pc.wrapping_add(2), CpuCyclesCount(2))
+                    (self.pc.wrapping_add(2), 2)
                 }
                 instruction::PrefixTarget::L => {
                     self.registers.l = self.reset_bit(self.registers.l, pos as u32);
-                    (self.pc.wrapping_add(2), CpuCyclesCount(2))
+                    (self.pc.wrapping_add(2), 2)
                 }
                 instruction::PrefixTarget::HLP => {
                     self.memory.write_byte(
                         self.registers.hl(),
                         self.reset_bit(self.read_hl_byte(), pos as u32),
                     );
-                    (self.pc.wrapping_add(2), CpuCyclesCount(4))
+                    (self.pc.wrapping_add(2), 4)
                 }
             },
             Instruction::SET(pos, target) => match target {
                 instruction::PrefixTarget::A => {
                     self.registers.a = self.set_bit(self.registers.a, pos as u32);
-                    (self.pc.wrapping_add(2), CpuCyclesCount(2))
+                    (self.pc.wrapping_add(2), 2)
                 }
                 instruction::PrefixTarget::B => {
                     self.registers.b = self.set_bit(self.registers.b, pos as u32);
-                    (self.pc.wrapping_add(2), CpuCyclesCount(2))
+                    (self.pc.wrapping_add(2), 2)
                 }
                 instruction::PrefixTarget::C => {
                     self.registers.c = self.set_bit(self.registers.c, pos as u32);
-                    (self.pc.wrapping_add(2), CpuCyclesCount(2))
+                    (self.pc.wrapping_add(2), 2)
                 }
                 instruction::PrefixTarget::D => {
                     self.registers.d = self.set_bit(self.registers.d, pos as u32);
-                    (self.pc.wrapping_add(2), CpuCyclesCount(2))
+                    (self.pc.wrapping_add(2), 2)
                 }
                 instruction::PrefixTarget::E => {
                     self.registers.e = self.set_bit(self.registers.e, pos as u32);
-                    (self.pc.wrapping_add(2), CpuCyclesCount(2))
+                    (self.pc.wrapping_add(2), 2)
                 }
                 instruction::PrefixTarget::H => {
                     self.registers.h = self.set_bit(self.registers.h, pos as u32);
-                    (self.pc.wrapping_add(2), CpuCyclesCount(2))
+                    (self.pc.wrapping_add(2), 2)
                 }
                 instruction::PrefixTarget::L => {
                     self.registers.l = self.set_bit(self.registers.l, pos as u32);
-                    (self.pc.wrapping_add(2), CpuCyclesCount(2))
+                    (self.pc.wrapping_add(2), 2)
                 }
                 instruction::PrefixTarget::HLP => {
                     self.memory.write_byte(
                         self.registers.hl(),
                         self.set_bit(self.read_hl_byte(), pos as u32),
                     );
-                    (self.pc.wrapping_add(2), CpuCyclesCount(4))
+                    (self.pc.wrapping_add(2), 4)
                 }
             },
 
             Instruction::CPL => {
                 self.registers.a = self.complement_accum();
-                (self.pc.wrapping_add(1), CpuCyclesCount(1))
+                (self.pc.wrapping_add(1), 1)
             }
             Instruction::AND(target) => {
                 arithmetic_instruction!(target; bitwise_and => self.registers.a)
@@ -437,11 +438,11 @@ impl CPU {
 
             Instruction::SCF => {
                 self.set_carry_flag(true);
-                (self.pc.wrapping_add(1), CpuCyclesCount(1))
+                (self.pc.wrapping_add(1), 1)
             }
             Instruction::CCF => {
                 self.set_carry_flag(!self.registers.f.carry);
-                (self.pc.wrapping_add(1), CpuCyclesCount(1))
+                (self.pc.wrapping_add(1), 1)
             }
 
             #[allow(clippy::self_assignment)]
@@ -457,11 +458,11 @@ impl CPU {
 
                     instruction::LoadByteSource::HLP => {
                         let res = load_byte!(target, self.read_hl_byte());
-                        (res.0, res.1 + CpuCyclesCount(1))
+                        (res.0, res.1 + 1)
                     }
                     instruction::LoadByteSource::U8 => {
                         let res = load_byte!(target, self.read_next_byte());
-                        (res.0 + 1, res.1 + CpuCyclesCount(1))
+                        (res.0 + 1, res.1 + 1)
                     }
                 },
 
@@ -473,39 +474,39 @@ impl CPU {
                         instruction::LoadWordTarget::HL => self.registers.set_hl(value),
                         instruction::LoadWordTarget::SP => self.sp = value,
                     }
-                    (self.pc.wrapping_add(3), CpuCyclesCount(3))
+                    (self.pc.wrapping_add(3), 3)
                 }
 
                 instruction::LoadType::AFromIndirect(target) => match target {
                     instruction::IndirectTarget::C => {
                         self.registers.a = self.memory.read_high_byte(self.registers.c);
-                        (self.pc.wrapping_add(1), CpuCyclesCount(2))
+                        (self.pc.wrapping_add(1), 2)
                     }
                     instruction::IndirectTarget::U8 => {
                         self.registers.a = self.memory.read_high_byte(self.read_next_byte());
-                        (self.pc.wrapping_add(2), CpuCyclesCount(3))
+                        (self.pc.wrapping_add(2), 3)
                     }
                     instruction::IndirectTarget::U16 => {
                         self.registers.a = self.memory.read_byte(self.read_next_word());
-                        (self.pc.wrapping_add(3), CpuCyclesCount(4))
+                        (self.pc.wrapping_add(3), 4)
                     }
                     instruction::IndirectTarget::BCP => {
                         self.registers.a = self.memory.read_byte(self.registers.bc());
-                        (self.pc.wrapping_add(1), CpuCyclesCount(2))
+                        (self.pc.wrapping_add(1), 2)
                     }
                     instruction::IndirectTarget::DEP => {
                         self.registers.a = self.memory.read_byte(self.registers.de());
-                        (self.pc.wrapping_add(1), CpuCyclesCount(2))
+                        (self.pc.wrapping_add(1), 2)
                     }
                     instruction::IndirectTarget::HLI => {
                         self.registers.a = self.memory.read_byte(self.registers.hl());
                         self.registers.set_hl(self.registers.hl() + 1);
-                        (self.pc.wrapping_add(1), CpuCyclesCount(2))
+                        (self.pc.wrapping_add(1), 2)
                     }
                     instruction::IndirectTarget::HLD => {
                         self.registers.a = self.memory.read_byte(self.registers.hl());
                         self.registers.set_hl(self.registers.hl() - 1);
-                        (self.pc.wrapping_add(1), CpuCyclesCount(2))
+                        (self.pc.wrapping_add(1), 2)
                     }
                 },
 
@@ -513,39 +514,39 @@ impl CPU {
                     instruction::IndirectTarget::C => {
                         self.memory
                             .write_high_byte(self.registers.c, self.registers.a);
-                        (self.pc.wrapping_add(1), CpuCyclesCount(2))
+                        (self.pc.wrapping_add(1), 2)
                     }
                     instruction::IndirectTarget::U8 => {
                         self.memory
                             .write_high_byte(self.read_next_byte(), self.registers.a);
-                        (self.pc.wrapping_add(2), CpuCyclesCount(3))
+                        (self.pc.wrapping_add(2), 3)
                     }
                     instruction::IndirectTarget::U16 => {
                         self.memory
                             .write_byte(self.read_next_word(), self.registers.a);
-                        (self.pc.wrapping_add(3), CpuCyclesCount(4))
+                        (self.pc.wrapping_add(3), 4)
                     }
                     instruction::IndirectTarget::BCP => {
                         self.memory
                             .write_byte(self.registers.bc(), self.registers.a);
-                        (self.pc.wrapping_add(1), CpuCyclesCount(2))
+                        (self.pc.wrapping_add(1), 2)
                     }
                     instruction::IndirectTarget::DEP => {
                         self.memory
                             .write_byte(self.registers.de(), self.registers.a);
-                        (self.pc.wrapping_add(1), CpuCyclesCount(2))
+                        (self.pc.wrapping_add(1), 2)
                     }
                     instruction::IndirectTarget::HLI => {
                         self.memory
                             .write_byte(self.registers.hl(), self.registers.a);
                         self.registers.set_hl(self.registers.hl() + 1);
-                        (self.pc.wrapping_add(1), CpuCyclesCount(2))
+                        (self.pc.wrapping_add(1), 2)
                     }
                     instruction::IndirectTarget::HLD => {
                         self.memory
                             .write_byte(self.registers.hl(), self.registers.a);
                         self.registers.set_hl(self.registers.hl() - 1);
-                        (self.pc.wrapping_add(1), CpuCyclesCount(2))
+                        (self.pc.wrapping_add(1), 2)
                     }
                 },
 
@@ -555,12 +556,12 @@ impl CPU {
                     self.memory.write_byte(addr, self.sp as u8);
                     self.memory
                         .write_byte(addr + 1, (self.sp >> u8::BITS) as u8);
-                    (self.pc.wrapping_add(3), CpuCyclesCount(5))
+                    (self.pc.wrapping_add(3), 5)
                 }
 
                 instruction::LoadType::SPFromHL => {
                     self.sp = self.registers.hl();
-                    (self.pc.wrapping_add(1), CpuCyclesCount(2))
+                    (self.pc.wrapping_add(1), 2)
                 }
 
                 instruction::LoadType::HLFromSPN => {
@@ -574,31 +575,31 @@ impl CPU {
                     // Set if overflow from bit 7.
                     self.registers.f.carry = (self.sp & 0xFF) + (val & 0xFF) > 0xFF;
 
-                    (self.pc.wrapping_add(2), CpuCyclesCount(3))
+                    (self.pc.wrapping_add(2), 3)
                 }
             },
 
             Instruction::RL(target) => bit_shift_instruction!(target; rotate_left: true, true),
             Instruction::RLA => {
                 self.registers.a = self.rotate_left(self.registers.a, true, false);
-                (self.pc.wrapping_add(1), CpuCyclesCount(1))
+                (self.pc.wrapping_add(1), 1)
             }
             Instruction::RLC(target) => bit_shift_instruction!(target; rotate_left: false, true),
             Instruction::RLCA => {
                 self.registers.a = self.rotate_left(self.registers.a, false, false);
-                (self.pc.wrapping_add(1), CpuCyclesCount(1))
+                (self.pc.wrapping_add(1), 1)
             }
             Instruction::SLA(target) => bit_shift_instruction!(target; shift_left_arith:),
 
             Instruction::RR(target) => bit_shift_instruction!(target; rotate_right: true, true),
             Instruction::RRA => {
                 self.registers.a = self.rotate_right(self.registers.a, true, false);
-                (self.pc.wrapping_add(1), CpuCyclesCount(1))
+                (self.pc.wrapping_add(1), 1)
             }
             Instruction::RRC(target) => bit_shift_instruction!(target; rotate_right: false, true),
             Instruction::RRCA => {
                 self.registers.a = self.rotate_right(self.registers.a, false, false);
-                (self.pc.wrapping_add(1), CpuCyclesCount(1))
+                (self.pc.wrapping_add(1), 1)
             }
             Instruction::SRA(target) => bit_shift_instruction!(target; shift_right: true),
             Instruction::SRL(target) => bit_shift_instruction!(target; shift_right: false),
@@ -615,7 +616,7 @@ impl CPU {
                 let jump = self.jump_test_res(test);
                 self.jump_absolute(addr, jump)
             }
-            Instruction::JPHLP => (self.registers.hl(), CpuCyclesCount(1)),
+            Instruction::JPHLP => (self.registers.hl(), 1),
 
             Instruction::CALL(test) => {
                 let jump_addr = self.read_next_word();
@@ -626,24 +627,24 @@ impl CPU {
             Instruction::RET(test) => {
                 let jump_test = self.jump_test_res(test);
                 let next_pc = self.ret(jump_test);
-                let cycles = CpuCyclesCount(if let instruction::JumpTest::Always = test {
+                let cycles = if let instruction::JumpTest::Always = test {
                     4
                 } else if jump_test {
                     5
                 } else {
                     2
-                });
+                };
                 (next_pc, cycles)
             }
 
             Instruction::RETI => {
                 self.interrupts_enabled = true;
-                (self.ret(true), CpuCyclesCount(4))
+                (self.ret(true), 4)
             }
 
             Instruction::RST(vec_) => {
                 self.push_stack(self.pc.wrapping_add(1));
-                (vec_.to_addr(), CpuCyclesCount(4))
+                (vec_.to_addr(), 4)
             }
 
             Instruction::ADDSP => {
@@ -652,70 +653,70 @@ impl CPU {
                 // it will subtract if i8 is negative.
                 let val = self.read_next_byte() as i8 as i16 as u16;
                 self.move_sp_relative(val);
-                (self.pc.wrapping_add(2), CpuCyclesCount(4))
+                (self.pc.wrapping_add(2), 4)
             }
 
             Instruction::PUSH(target) => match target {
                 instruction::StackTarget::AF => {
                     self.push_stack(self.registers.af());
-                    (self.pc.wrapping_add(1), CpuCyclesCount(4))
+                    (self.pc.wrapping_add(1), 4)
                 }
                 instruction::StackTarget::BC => {
                     self.push_stack(self.registers.bc());
-                    (self.pc.wrapping_add(1), CpuCyclesCount(4))
+                    (self.pc.wrapping_add(1), 4)
                 }
                 instruction::StackTarget::DE => {
                     self.push_stack(self.registers.de());
-                    (self.pc.wrapping_add(1), CpuCyclesCount(4))
+                    (self.pc.wrapping_add(1), 4)
                 }
                 instruction::StackTarget::HL => {
                     self.push_stack(self.registers.hl());
-                    (self.pc.wrapping_add(1), CpuCyclesCount(4))
+                    (self.pc.wrapping_add(1), 4)
                 }
             },
             Instruction::POP(target) => match target {
                 instruction::StackTarget::AF => {
                     let val = self.pop_stack();
                     self.registers.set_af(val);
-                    (self.pc.wrapping_add(1), CpuCyclesCount(3))
+                    (self.pc.wrapping_add(1), 3)
                 }
                 instruction::StackTarget::BC => {
                     let val = self.pop_stack();
                     self.registers.set_bc(val);
-                    (self.pc.wrapping_add(1), CpuCyclesCount(3))
+                    (self.pc.wrapping_add(1), 3)
                 }
                 instruction::StackTarget::DE => {
                     let val = self.pop_stack();
                     self.registers.set_de(val);
-                    (self.pc.wrapping_add(1), CpuCyclesCount(3))
+                    (self.pc.wrapping_add(1), 3)
                 }
                 instruction::StackTarget::HL => {
                     let val = self.pop_stack();
                     self.registers.set_hl(val);
-                    (self.pc.wrapping_add(1), CpuCyclesCount(3))
+                    (self.pc.wrapping_add(1), 3)
                 }
             },
 
             Instruction::DI => {
                 self.interrupts_enabled = false;
-                (self.pc.wrapping_add(1), CpuCyclesCount(1))
+                (self.pc.wrapping_add(1), 1)
             }
             Instruction::EI => {
                 self.interrupts_enabled = true;
-                (self.pc.wrapping_add(1), CpuCyclesCount(1))
+                (self.pc.wrapping_add(1), 1)
             }
 
             Instruction::HALT => {
                 self.is_halted = true;
-                (self.pc.wrapping_add(1), CpuCyclesCount(1))
+                (self.pc.wrapping_add(1), 1)
             }
 
             Instruction::DAA => {
                 self.registers.a = self.decimal_adjust_accum(self.registers.a);
-                (self.pc.wrapping_add(1), CpuCyclesCount(1))
+                (self.pc.wrapping_add(1), 1)
             }
 
-            Instruction::NOP => (self.pc.wrapping_add(1), CpuCyclesCount(1)),
+            Instruction::NOP => (self.pc.wrapping_add(1), 1),
 
             // https://gbdev.io/pandocs/Reducing_Power_Consumption.html?highlight=stop#using-the-stop-instruction
             Instruction::STOP => unimplemented!("STOP instruction is not supported currently."),
@@ -983,33 +984,30 @@ impl CPU {
     }
 
     #[must_use]
-    fn jump_relative(&mut self, addr: u16, jump: bool) -> (u16, CpuCyclesCount) {
+    fn jump_relative(&mut self, addr: u16, jump: bool) -> (u16, usize) {
         if jump {
-            (
-                self.pc.wrapping_add(2).wrapping_add(addr),
-                CpuCyclesCount(3),
-            )
+            (self.pc.wrapping_add(2).wrapping_add(addr), 3)
         } else {
-            (self.pc.wrapping_add(2), CpuCyclesCount(2))
+            (self.pc.wrapping_add(2), 2)
         }
     }
 
     #[must_use]
-    fn jump_absolute(&mut self, addr: u16, jump: bool) -> (u16, CpuCyclesCount) {
+    fn jump_absolute(&mut self, addr: u16, jump: bool) -> (u16, usize) {
         if jump {
-            (addr, CpuCyclesCount(4))
+            (addr, 4)
         } else {
-            (self.pc.wrapping_add(3), CpuCyclesCount(3))
+            (self.pc.wrapping_add(3), 3)
         }
     }
 
     #[must_use]
-    fn call(&mut self, addr: u16, jump: bool) -> (u16, CpuCyclesCount) {
+    fn call(&mut self, addr: u16, jump: bool) -> (u16, usize) {
         if jump {
             self.push_stack(self.pc.wrapping_add(3));
-            (addr, CpuCyclesCount(6))
+            (addr, 6)
         } else {
-            (self.pc.wrapping_add(3), CpuCyclesCount(3))
+            (self.pc.wrapping_add(3), 3)
         }
     }
 
@@ -1050,20 +1048,6 @@ impl CPU {
         self.sp = self.sp.wrapping_add(2);
 
         val
-    }
-}
-
-impl CpuCyclesCount {
-    pub fn get(&self) -> usize {
-        self.0
-    }
-}
-
-impl std::ops::Add for CpuCyclesCount {
-    type Output = Self;
-
-    fn add(self, rhs: Self) -> Self::Output {
-        CpuCyclesCount(self.0 + rhs.0)
     }
 }
 

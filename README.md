@@ -15,3 +15,5 @@ Rust implementation (DMG-01): https://github.com/rylev/DMG-01/blob/master/lib-dm
 Opcodes: https://izik1.github.io/gbops/
 
 Opcodes textual explanation: https://rgbds.gbdev.io/docs/v0.9.0/gbz80.7
+
+Gameboy Emulation: http://www.codeslinger.co.uk/pages/projects/gameboy.html
