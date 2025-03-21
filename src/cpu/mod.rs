@@ -38,6 +38,45 @@ impl CPU {
 
         self.pc = new_pc;
         self.memory.step(cycles);
+
+        self.process_interrupts();
+    }
+
+    fn process_interrupts(&mut self) {
+        if !self.interrupts_enabled {
+            return;
+        }
+
+        if self.memory.vbank_interrupt() {
+            self.memory.reset_vbank_interrupt();
+            self.interrupt(0x40);
+        }
+
+        if self.memory.lcd_interrupt() {
+            self.memory.reset_lcd_interrupt();
+            self.interrupt(0x48);
+        }
+
+        if self.memory.timer_interrupt() {
+            self.memory.reset_timer_interrupt();
+            self.interrupt(0x50);
+        }
+
+        if self.memory.serial_interrupt() {
+            self.memory.reset_serial_interrupt();
+            self.interrupt(0x58);
+        }
+
+        if self.memory.joypad_interrupt() {
+            self.memory.reset_joypad_interrupt();
+            self.interrupt(0x60);
+        }
+    }
+
+    fn interrupt(&mut self, addr: u16) {
+        self.interrupts_enabled = false;
+        self.push_stack(self.pc);
+        self.pc = addr;
     }
 
     fn get_current_instruction(&self) -> Instruction {

@@ -151,8 +151,43 @@ impl MemoryBus {
         }
     }
 
-    pub fn has_interrupt(&self) -> bool {
-        u8::from(self.interrupt_enable) & u8::from(self.interrupt_flag) != 0
+    // pub fn has_interrupt(&self) -> bool {
+    //     u8::from(self.interrupt_enable) & u8::from(self.interrupt_flag) != 0
+    // }
+
+    pub fn vbank_interrupt(&self) -> bool {
+        self.interrupt_enable.vbank && self.interrupt_flag.vbank
+    }
+    pub fn reset_vbank_interrupt(&mut self) {
+        self.interrupt_flag.vbank = false;
+    }
+
+    pub fn lcd_interrupt(&self) -> bool {
+        self.interrupt_enable.lcd && self.interrupt_flag.lcd
+    }
+    pub fn reset_lcd_interrupt(&mut self) {
+        self.interrupt_flag.lcd = false;
+    }
+
+    pub fn timer_interrupt(&self) -> bool {
+        self.interrupt_enable.timer && self.interrupt_flag.timer
+    }
+    pub fn reset_timer_interrupt(&mut self) {
+        self.interrupt_flag.timer = false;
+    }
+
+    pub fn serial_interrupt(&self) -> bool {
+        self.interrupt_enable.serial && self.interrupt_flag.serial
+    }
+    pub fn reset_serial_interrupt(&mut self) {
+        self.interrupt_flag.serial = false;
+    }
+
+    pub fn joypad_interrupt(&self) -> bool {
+        self.interrupt_enable.joypad && self.interrupt_flag.joypad
+    }
+    pub fn reset_joypad_interrupt(&mut self) {
+        self.interrupt_flag.joypad = false;
     }
 
     pub fn read_byte(&self, addr: u16) -> u8 {
