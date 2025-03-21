@@ -1,3 +1,5 @@
+use crate::bit;
+
 pub const HALF_CARRY_MASK: u8 = 0xF;
 
 // If there's a combination of values of fields which breaks some invariant,
@@ -97,10 +99,10 @@ impl From<FlagsRegister> for u8 {
 impl From<u8> for FlagsRegister {
     fn from(value: u8) -> Self {
         FlagsRegister {
-            zero: (value >> Self::ZERO_FLAG_POSITION) & 1 == 1,
-            subtract: (value >> Self::SUBTRACT_FLAG_POSITION) & 1 == 1,
-            half_carry: (value >> Self::HALF_CARRY_FLAG_POSITION) & 1 == 1,
-            carry: (value >> Self::CARRY_FLAG_POSITION) & 1 == 1,
+            zero: bit!(value, Self::ZERO_FLAG_POSITION),
+            subtract: bit!(value, Self::SUBTRACT_FLAG_POSITION),
+            half_carry: bit!(value, Self::HALF_CARRY_FLAG_POSITION),
+            carry: bit!(value, Self::CARRY_FLAG_POSITION),
         }
     }
 }

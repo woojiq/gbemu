@@ -1,61 +1,63 @@
 // https://gbdev.io/pandocs/Memory_Map.html
 
-const BOOT_ROM_START: u16 = 0x0000;
-const BOOT_ROM_END: u16 = 0x00FF;
-const BOOT_ROM_SIZE: usize = (BOOT_ROM_END - BOOT_ROM_START + 1) as usize;
+use crate::{bit, gpu::GPU};
 
-const ROM_BANK_0_START: u16 = 0x0000;
-const ROM_BANK_0_END: u16 = 0x3FFF;
-const ROM_BANK_0_SIZE: usize = (ROM_BANK_0_END - ROM_BANK_0_START + 1) as usize;
+pub const BOOT_ROM_START: u16 = 0x0000;
+pub const BOOT_ROM_END: u16 = 0x00FF;
+pub const BOOT_ROM_SIZE: usize = (BOOT_ROM_END - BOOT_ROM_START + 1) as usize;
 
-const ROM_BANK_N_START: u16 = 0x4000;
-const ROM_BANK_N_END: u16 = 0x7FFF;
-const ROM_BANK_N_SIZE: usize = (ROM_BANK_N_END - ROM_BANK_N_START + 1) as usize;
+pub const ROM_BANK_0_START: u16 = 0x0000;
+pub const ROM_BANK_0_END: u16 = 0x3FFF;
+pub const ROM_BANK_0_SIZE: usize = (ROM_BANK_0_END - ROM_BANK_0_START + 1) as usize;
 
-const VIDEO_RAM_START: u16 = 0x8000;
-const VIDEO_RAM_END: u16 = 0x9FFF;
-const VIDEO_RAM_SIZE: usize = (VIDEO_RAM_END - VIDEO_RAM_START + 1) as usize;
+pub const ROM_BANK_N_START: u16 = 0x4000;
+pub const ROM_BANK_N_END: u16 = 0x7FFF;
+pub const ROM_BANK_N_SIZE: usize = (ROM_BANK_N_END - ROM_BANK_N_START + 1) as usize;
 
-const EXTERNAL_RAM_START: u16 = 0xA000;
-const EXTERNAL_RAM_END: u16 = 0xBFFF;
-const EXTERNAL_RAM_SIZE: usize = (EXTERNAL_RAM_END - EXTERNAL_RAM_START + 1) as usize;
+pub const VIDEO_RAM_START: u16 = 0x8000;
+pub const VIDEO_RAM_END: u16 = 0x9FFF;
+pub const VIDEO_RAM_SIZE: usize = (VIDEO_RAM_END - VIDEO_RAM_START + 1) as usize;
 
-const WORKING_RAM_START: u16 = 0xC000;
-const WORKING_RAM_END: u16 = 0xDFFF;
-const WORKING_RAM_SIZE: usize = (WORKING_RAM_END - WORKING_RAM_START + 1) as usize;
+pub const EXTERNAL_RAM_START: u16 = 0xA000;
+pub const EXTERNAL_RAM_END: u16 = 0xBFFF;
+pub const EXTERNAL_RAM_SIZE: usize = (EXTERNAL_RAM_END - EXTERNAL_RAM_START + 1) as usize;
 
-const ECHO_RAM_START: u16 = 0xE000;
-const ECHO_RAM_END: u16 = 0xFDFF;
-const ECHO_RAM_SIZE: usize = (ECHO_RAM_END - ECHO_RAM_START + 1) as usize;
+pub const WORKING_RAM_START: u16 = 0xC000;
+pub const WORKING_RAM_END: u16 = 0xDFFF;
+pub const WORKING_RAM_SIZE: usize = (WORKING_RAM_END - WORKING_RAM_START + 1) as usize;
+
+pub const ECHO_RAM_START: u16 = 0xE000;
+pub const ECHO_RAM_END: u16 = 0xFDFF;
+pub const ECHO_RAM_SIZE: usize = (ECHO_RAM_END - ECHO_RAM_START + 1) as usize;
 
 // Object attribute memory (OAM).
-const OAM_START: u16 = 0xFE00;
-const OAM_END: u16 = 0xFE9F;
-const OAM_SIZE: usize = (OAM_END - OAM_START + 1) as usize;
+pub const OAM_START: u16 = 0xFE00;
+pub const OAM_END: u16 = 0xFE9F;
+pub const OAM_SIZE: usize = (OAM_END - OAM_START + 1) as usize;
 
-const UNUSED_START: u16 = 0xFEA0;
-const UNUSED_END: u16 = 0xFEFF;
-const UNUSED_SIZE: usize = (UNUSED_END - UNUSED_START + 1) as usize;
+pub const UNUSED_START: u16 = 0xFEA0;
+pub const UNUSED_END: u16 = 0xFEFF;
+pub const UNUSED_SIZE: usize = (UNUSED_END - UNUSED_START + 1) as usize;
 
-const IO_REGISTERS_START: u16 = 0xFF00;
-const IO_REGISTERS_END: u16 = 0xFF7F;
-const IO_REGISTERS_SIZE: usize = (IO_REGISTERS_END - IO_REGISTERS_START + 1) as usize;
+pub const IO_REGISTERS_START: u16 = 0xFF00;
+pub const IO_REGISTERS_END: u16 = 0xFF7F;
+pub const IO_REGISTERS_SIZE: usize = (IO_REGISTERS_END - IO_REGISTERS_START + 1) as usize;
 
-const HIGH_RAM_AREA_START: u16 = 0xFF80;
-const HIGH_RAM_AREA_END: u16 = 0xFFFE;
-const HIGH_RAM_AREA_SIZE: usize = (HIGH_RAM_AREA_END - HIGH_RAM_AREA_START + 1) as usize;
+pub const HIGH_RAM_AREA_START: u16 = 0xFF80;
+pub const HIGH_RAM_AREA_END: u16 = 0xFFFE;
+pub const HIGH_RAM_AREA_SIZE: usize = (HIGH_RAM_AREA_END - HIGH_RAM_AREA_START + 1) as usize;
 
-const INTERRUPT_ENABLED_REGISTER: u16 = 0xFFFF;
+pub const INTERRUPT_ENABLED_REGISTER: u16 = 0xFFFF;
 
 pub struct MemoryBus {
     boot_rom: [u8; BOOT_ROM_SIZE],
     rom_bank_0: [u8; ROM_BANK_0_SIZE],
     rom_bank_n: [u8; ROM_BANK_N_SIZE],
-    vram: [u8; VIDEO_RAM_SIZE],
     external_ram: [u8; EXTERNAL_RAM_SIZE],
     /// Working RAM.
     wram: [u8; WORKING_RAM_SIZE],
-    oam: [u8; OAM_SIZE],
+
+    gpu: GPU,
 
     // IO registers:
     interrupt_enable: InterruptFlags,
@@ -115,7 +117,7 @@ pub struct Timer {
 
 #[derive(Copy, Clone)]
 pub struct InterruptFlags {
-    vbank: bool,
+    vblank: bool,
     lcd: bool,
     timer: bool,
     serial: bool,
@@ -128,10 +130,10 @@ impl MemoryBus {
             boot_rom: [0; BOOT_ROM_SIZE],
             rom_bank_0: [0; ROM_BANK_0_SIZE],
             rom_bank_n: [0; ROM_BANK_N_SIZE],
-            vram: [0; VIDEO_RAM_SIZE],
             external_ram: [0; EXTERNAL_RAM_SIZE],
             wram: [0; WORKING_RAM_SIZE],
-            oam: [0; OAM_SIZE],
+
+            gpu: GPU::new(),
 
             joypad: Joypad::new(),
             divider: Timer::new(TimerRateHz::F16384),
@@ -149,6 +151,10 @@ impl MemoryBus {
         if self.timer.step(cycles) {
             self.interrupt_flag.timer = true;
         }
+
+        let inter = self.gpu.step(cycles);
+        self.interrupt_flag.vblank = inter.vblank;
+        self.interrupt_flag.lcd = inter.lcd;
     }
 
     // pub fn has_interrupt(&self) -> bool {
@@ -156,10 +162,10 @@ impl MemoryBus {
     // }
 
     pub fn vbank_interrupt(&self) -> bool {
-        self.interrupt_enable.vbank && self.interrupt_flag.vbank
+        self.interrupt_enable.vblank && self.interrupt_flag.vblank
     }
     pub fn reset_vbank_interrupt(&mut self) {
-        self.interrupt_flag.vbank = false;
+        self.interrupt_flag.vblank = false;
     }
 
     pub fn lcd_interrupt(&self) -> bool {
@@ -197,15 +203,15 @@ impl MemoryBus {
                 self.rom_bank_0[(addr - ROM_BANK_0_START) as usize]
             }
             ROM_BANK_N_START..=ROM_BANK_N_END => {
-                self.rom_bank_0[(addr - ROM_BANK_N_START) as usize]
+                self.rom_bank_n[(addr - ROM_BANK_N_START) as usize]
             }
-            VIDEO_RAM_START..=VIDEO_RAM_END => self.vram[(addr - VIDEO_RAM_START) as usize],
+            VIDEO_RAM_START..=VIDEO_RAM_END => self.gpu.vram[(addr - VIDEO_RAM_START) as usize],
             EXTERNAL_RAM_START..=EXTERNAL_RAM_END => {
                 self.external_ram[(addr - EXTERNAL_RAM_START) as usize]
             }
             WORKING_RAM_START..=WORKING_RAM_END => self.wram[(addr - WORKING_RAM_START) as usize],
             ECHO_RAM_START..=ECHO_RAM_END => panic!(r#"Use of "Echo RAM" memory section."#),
-            OAM_START..=OAM_END => self.oam[(addr - OAM_START) as usize],
+            OAM_START..=OAM_END => self.gpu.oam[(addr - OAM_START) as usize],
             UNUSED_START..=UNUSED_END => panic!(r#"Use of "Not Usable" memory section."#),
             IO_REGISTERS_START..=IO_REGISTERS_END => self.read_io_register(addr),
             HIGH_RAM_AREA_START..=HIGH_RAM_AREA_END => {
@@ -228,9 +234,11 @@ impl MemoryBus {
                 self.rom_bank_0[(addr - ROM_BANK_0_START) as usize] = val
             }
             ROM_BANK_N_START..=ROM_BANK_N_END => {
-                self.rom_bank_0[(addr - ROM_BANK_N_START) as usize] = val
+                self.rom_bank_n[(addr - ROM_BANK_N_START) as usize] = val
             }
-            VIDEO_RAM_START..=VIDEO_RAM_END => self.vram[(addr - VIDEO_RAM_START) as usize] = val,
+            VIDEO_RAM_START..=VIDEO_RAM_END => {
+                self.gpu.vram[(addr - VIDEO_RAM_START) as usize] = val
+            }
             EXTERNAL_RAM_START..=EXTERNAL_RAM_END => {
                 self.external_ram[(addr - EXTERNAL_RAM_START) as usize] = val
             }
@@ -238,7 +246,7 @@ impl MemoryBus {
                 self.wram[(addr - WORKING_RAM_START) as usize] = val
             }
             ECHO_RAM_START..=ECHO_RAM_END => panic!(r#"Use of "Echo RAM" memory section."#),
-            OAM_START..=OAM_END => self.oam[(addr - OAM_START) as usize] = val,
+            OAM_START..=OAM_END => self.gpu.oam[(addr - OAM_START) as usize] = val,
             UNUSED_START..=UNUSED_END => panic!(r#"Use of "Not Usable" memory section."#),
             IO_REGISTERS_START..=IO_REGISTERS_END => self.write_io_register(addr, val),
             HIGH_RAM_AREA_START..=HIGH_RAM_AREA_END => {
@@ -275,6 +283,17 @@ impl MemoryBus {
             0xFF0F => u8::from(self.interrupt_flag),
             0xFF10..=0xFF26 => unimplemented!("Audio registers are not supported yet."),
             0xFF30..=0xFF3F => unimplemented!("Wave pattern registers are not supported yet."),
+            0xFF40 => u8::from(self.gpu.lcd_control),
+            0xFF41 => self.gpu.lcd_status.get_status_byte(),
+            0xFF42 => self.gpu.viewport.y,
+            0xFF43 => self.gpu.viewport.x,
+            0xFF44 => self.gpu.lcd_status.ly(),
+            0xFF45 => self.gpu.lcd_status.lyc,
+            0xFF47 => u8::from(self.gpu.bg_colors),
+            0xFF48 => u8::from(self.gpu.obj0_colors),
+            0xFF49 => u8::from(self.gpu.obj1_colors),
+            0xFF4A => self.gpu.window.y,
+            0xFF4B => self.gpu.window.x,
             _ => unimplemented!(),
         }
     }
@@ -300,7 +319,37 @@ impl MemoryBus {
                 self.timer.enable = val & (1 << 2) != 0;
             }
             0xFF0F => self.interrupt_flag = InterruptFlags::from(val),
+            0xFF40 => self.gpu.lcd_control = crate::gpu::LcdControl::from(val),
+            0xFF41 => self.gpu.lcd_status.write_byte_to_status(val),
+            0xFF42 => self.gpu.viewport.y = val,
+            0xFF43 => self.gpu.viewport.x = val,
+            0xFF44 => panic!("LCD Y coordinate is read-only."),
+            0xFF45 => self.gpu.lcd_status.lyc = val,
+            0xFF46 => {
+                // Writing to this register starts a DMA transfer from ROM or
+                // RAM to OAM (Object Attribute Memory). The transfer takes 160
+                // M-cycles: 640 dots (1.4 lines) in normal speed.
+                self.dma_transfer((val as u16) * 0x100);
+            }
+            0xFF47 => self.gpu.bg_colors = super::gpu::BackgroundColors::from(val),
+            // Lower two bits are ignored because color index 0 is transparent for OBJs.
+            0xFF48 => self.gpu.obj0_colors = super::gpu::BackgroundColors::from(val & !0b11),
+            0xFF49 => self.gpu.obj1_colors = super::gpu::BackgroundColors::from(val & !0b11),
+            0xFF4A => self.gpu.window.y = val,
+            0xFF4B => self.gpu.window.x = val,
             _ => panic!("Cannot write to memory location 0x{addr:X}"),
+        }
+    }
+
+    fn dma_transfer(&mut self, addr: u16) {
+        const DMA_DEST_START: u16 = 0xFE00;
+        const DMA_DEST_END: u16 = 0xFE9F;
+
+        for dest_addr in DMA_DEST_START..=DMA_DEST_END {
+            self.write_byte(
+                dest_addr,
+                self.read_byte(addr + (dest_addr - DMA_DEST_START)),
+            );
         }
     }
 }
@@ -423,7 +472,7 @@ impl Timer {
 impl InterruptFlags {
     pub fn new() -> Self {
         Self {
-            vbank: false,
+            vblank: false,
             lcd: false,
             timer: false,
             serial: false,
@@ -438,18 +487,18 @@ impl From<InterruptFlags> for u8 {
             | ((v.serial as u8) << 3)
             | ((v.timer as u8) << 2)
             | ((v.lcd as u8) << 1)
-            | (v.vbank as u8)
+            | (v.vblank as u8)
     }
 }
 
 impl From<u8> for InterruptFlags {
     fn from(v: u8) -> Self {
         Self {
-            vbank: (v >> 0) & 1 == 1,
-            lcd: (v >> 1) & 1 == 1,
-            timer: (v >> 2) & 1 == 1,
-            serial: (v >> 3) & 1 == 1,
-            joypad: (v >> 4) & 1 == 1,
+            vblank: bit!(v, 0),
+            lcd: bit!(v, 1),
+            timer: bit!(v, 2),
+            serial: bit!(v, 3),
+            joypad: bit!(v, 4),
         }
     }
 }
@@ -459,7 +508,7 @@ impl std::ops::BitAnd for InterruptFlags {
 
     fn bitand(self, rhs: Self) -> Self::Output {
         Self::Output {
-            vbank: self.vbank & rhs.vbank,
+            vblank: self.vblank & rhs.vblank,
             lcd: self.lcd & rhs.lcd,
             timer: self.timer & rhs.timer,
             serial: self.serial & rhs.serial,

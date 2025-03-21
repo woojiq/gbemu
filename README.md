@@ -17,3 +17,5 @@ Opcodes: https://izik1.github.io/gbops/
 Opcodes textual explanation: https://rgbds.gbdev.io/docs/v0.9.0/gbz80.7
 
 Gameboy Emulation: http://www.codeslinger.co.uk/pages/projects/gameboy.html
+
+Guide with pictures: https://hacktix.github.io/GBEDG/ppu
