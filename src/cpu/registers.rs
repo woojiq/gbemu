@@ -27,14 +27,14 @@ pub struct FlagsRegister {
 impl CpuRegisters {
     pub fn new() -> Self {
         Self {
-            a: 0,
-            b: 0,
-            c: 0,
-            d: 0,
-            e: 0,
+            a: 0x01,
+            b: 0x00,
+            c: 0x13,
+            d: 0x00,
+            e: 0xD8,
             f: FlagsRegister::new(),
-            h: 0,
-            l: 0,
+            h: 0x01,
+            l: 0x4D,
         }
     }
 
@@ -79,10 +79,10 @@ impl FlagsRegister {
 
     pub fn new() -> Self {
         FlagsRegister {
-            zero: false,
+            zero: true,
             subtract: false,
-            half_carry: false,
-            carry: false,
+            half_carry: true,
+            carry: true,
         }
     }
 }

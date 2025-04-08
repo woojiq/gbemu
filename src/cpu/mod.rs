@@ -1,11 +1,11 @@
 mod instruction;
 mod registers;
 
+pub use crate::joypad::JoypadKey;
 use crate::memory_bus::MemoryBus;
+
 use instruction::Instruction;
 use registers::{CpuRegisters, HALF_CARRY_MASK};
-
-pub const CPU_FREQ: usize = 4194304;
 
 pub struct CPU {
     registers: CpuRegisters,
@@ -16,65 +16,128 @@ pub struct CPU {
     sp: u16,
     is_halted: bool,
     interrupts_enabled: bool,
+    // Counters to schedule enable/disable IME.
+    di_timer: u8,
+    ei_timer: u8,
 }
 
 impl CPU {
     const INSTRUCTION_PREFIX: u8 = 0xCB;
 
-    pub fn new() -> Self {
+    pub fn new(game_rom: &[u8]) -> Self {
         Self {
             registers: CpuRegisters::new(),
-            memory: MemoryBus::new(),
-            pc: 0,
-            sp: 0,
+            memory: MemoryBus::new(game_rom),
+            pc: 0x100,
+            sp: 0xFFFE,
             is_halted: false,
-            interrupts_enabled: false,
+            interrupts_enabled: true,
+            di_timer: 0,
+            ei_timer: 0,
         }
     }
 
-    pub fn cycle(&mut self) {
+    pub fn cycle(&mut self) -> u32 {
+        // eprintln!(
+        //     "PC 0x{:X} SP 0x{:X}, INS 0x{:X}, NX 0x{:X}: {} {} {} {} {} {} {}, INTF {:b}, LINE {}, {}",
+        //     self.pc,
+        //     self.sp,
+        //     self.read_current_byte(),
+        //     self.read_next_byte(),
+        //     self.registers.a,
+        //     self.registers.b,
+        //     self.registers.c,
+        //     self.registers.d,
+        //     self.registers.e,
+        //     u8::from(self.registers.f),
+        //     self.registers.hl(),
+        //     u8::from(self.memory.interrupt_flag),
+        //     self.memory.gpu.lcd_status.ly(),
+        //     self.memory.gpu.cycles,
+        // );
+
+        self.update_ime();
+
+        let cycles = self.process_interrupts();
+        if cycles != 0 {
+            return self.memory.step(cycles);
+        }
+
         let instruction = self.get_current_instruction();
+
+        // log::trace!("Parsed instruction {instruction:?}.");
+
         let (new_pc, cycles) = self.execute(instruction);
 
-        self.pc = new_pc;
-        self.memory.step(cycles);
+        // eprintln!(
+        //     "Instruction {instruction:?} executed, cycles = {cycles}, new_pc = 0x{new_pc:X}."
+        // );
 
-        self.process_interrupts();
+        self.pc = new_pc;
+
+        self.memory.step(cycles)
     }
 
-    fn process_interrupts(&mut self) {
+    pub fn key_up(&mut self, key: JoypadKey) {
+        self.memory.key_up(key);
+    }
+
+    pub fn key_down(&mut self, key: JoypadKey) {
+        self.memory.key_down(key);
+    }
+
+    pub fn gpu(&self) -> &crate::gpu::GPU {
+        &self.memory.gpu
+    }
+
+    // https://gbdev.io/pandocs/Interrupts.html#ime-interrupt-master-enable-flag-write-only
+    // The effect of ei is delayed by one instruction. This means that ei followed immediately
+    // by di does not allow any interrupts between them. This interacts with the halt bug in an
+    // interesting way.
+    fn update_ime(&mut self) {
+        if self.di_timer == 1 {
+            self.interrupts_enabled = false;
+        }
+        self.di_timer = self.di_timer.saturating_sub(1);
+
+        if self.ei_timer == 1 {
+            self.interrupts_enabled = true;
+        }
+        self.ei_timer = self.ei_timer.saturating_sub(1);
+    }
+
+    fn process_interrupts(&mut self) -> u32 {
+        // dbg!(self.interrupts_enabled);
         if !self.interrupts_enabled {
-            return;
+            return 0;
         }
 
         if self.memory.vbank_interrupt() {
             self.memory.reset_vbank_interrupt();
             self.interrupt(0x40);
-        }
-
-        if self.memory.lcd_interrupt() {
+        } else if self.memory.lcd_interrupt() {
             self.memory.reset_lcd_interrupt();
             self.interrupt(0x48);
-        }
-
-        if self.memory.timer_interrupt() {
+        } else if self.memory.timer_interrupt() {
             self.memory.reset_timer_interrupt();
             self.interrupt(0x50);
-        }
-
-        if self.memory.serial_interrupt() {
+        } else if self.memory.serial_interrupt() {
             self.memory.reset_serial_interrupt();
             self.interrupt(0x58);
-        }
-
-        if self.memory.joypad_interrupt() {
+        } else if self.memory.joypad_interrupt() {
             self.memory.reset_joypad_interrupt();
             self.interrupt(0x60);
+        } else {
+            return 0;
         }
+
+        // TODO: Change to 5: https://gbdev.io/pandocs/Interrupts.html#interrupt-handling
+        4 * 4
     }
 
     fn interrupt(&mut self, addr: u16) {
         self.interrupts_enabled = false;
+        // dbg!(addr);
         self.push_stack(self.pc);
         self.pc = addr;
     }
@@ -83,9 +146,11 @@ impl CPU {
         let byte = self.read_current_byte();
         if byte == Self::INSTRUCTION_PREFIX {
             let byte = self.read_next_byte();
-            Instruction::from_byte(byte, true).unwrap()
+            Instruction::from_byte(byte, true)
+                .unwrap_or_else(|| panic!("Prefixed instruction 0x{byte:X} exists"))
         } else {
-            Instruction::from_byte(byte, false).unwrap()
+            Instruction::from_byte(byte, false)
+                .unwrap_or_else(|| panic!("Not prefixed instruction 0x{byte:X} exists"))
         }
     }
 
@@ -110,7 +175,7 @@ impl CPU {
         self.memory.read_byte(self.registers.hl())
     }
 
-    fn execute(&mut self, instruction: Instruction) -> (u16, usize) {
+    fn execute(&mut self, instruction: Instruction) -> (u16, u32) {
         macro_rules! arithmetic_instruction {
             ($target:ident; $func:ident) => {{
                 let _fake;
@@ -121,43 +186,43 @@ impl CPU {
                     // Bytes: 1; Cycles: 1;
                     instruction::ArithmeticTarget::A => {
                         $var = self.$func(self.registers.a);
-                        (self.pc.wrapping_add( 1), 1)
+                        (self.pc.wrapping_add(1), 1)
                     }
                     instruction::ArithmeticTarget::B => {
                         $var = self.$func(self.registers.b);
-                        (self.pc.wrapping_add( 1), 1)
+                        (self.pc.wrapping_add(1), 1)
                     }
                     instruction::ArithmeticTarget::C => {
                         $var = self.$func(self.registers.c);
-                        (self.pc.wrapping_add( 1), 1)
+                        (self.pc.wrapping_add(1), 1)
                     }
                     instruction::ArithmeticTarget::D => {
                         $var = self.$func(self.registers.d);
-                        (self.pc.wrapping_add( 1), 1)
+                        (self.pc.wrapping_add(1), 1)
                     }
                     instruction::ArithmeticTarget::E => {
                         $var = self.$func(self.registers.e);
-                        (self.pc.wrapping_add( 1), 1)
+                        (self.pc.wrapping_add(1), 1)
                     }
                     instruction::ArithmeticTarget::H => {
                         $var = self.$func(self.registers.h);
-                        (self.pc.wrapping_add( 1), 1)
+                        (self.pc.wrapping_add(1), 1)
                     }
                     instruction::ArithmeticTarget::L => {
                         $var = self.$func(self.registers.l);
-                        (self.pc.wrapping_add( 1), 1)
+                        (self.pc.wrapping_add(1), 1)
                     }
 
                     // Bytes: 1; Cycles: 2;
                     instruction::ArithmeticTarget::HLP => {
                         $var = self.$func(self.read_hl_byte());
-                        (self.pc.wrapping_add( 1), 2)
+                        (self.pc.wrapping_add(1), 2)
                     }
 
                     // Bytes: 2; Cycles: 2;
                     instruction::ArithmeticTarget::U8 => {
                         $var = self.$func(self.read_next_byte());
-                        (self.pc.wrapping_add( 2), 2)
+                        (self.pc.wrapping_add(2), 2)
                     }
                 }
             };
@@ -305,7 +370,7 @@ impl CPU {
             };
         }
 
-        match instruction {
+        let res = match instruction {
             Instruction::ADD(target) => {
                 arithmetic_instruction!(target; add_without_carry => self.registers.a)
             }
@@ -582,6 +647,7 @@ impl CPU {
                         (self.pc.wrapping_add(1), 2)
                     }
                     instruction::IndirectTarget::HLD => {
+                        // dbg!(crate::hex!(self.registers.hl()));
                         self.memory
                             .write_byte(self.registers.hl(), self.registers.a);
                         self.registers.set_hl(self.registers.hl() - 1);
@@ -737,11 +803,11 @@ impl CPU {
             },
 
             Instruction::DI => {
-                self.interrupts_enabled = false;
+                self.di_timer = 2;
                 (self.pc.wrapping_add(1), 1)
             }
             Instruction::EI => {
-                self.interrupts_enabled = true;
+                self.ei_timer = 2;
                 (self.pc.wrapping_add(1), 1)
             }
 
@@ -759,7 +825,9 @@ impl CPU {
 
             // https://gbdev.io/pandocs/Reducing_Power_Consumption.html?highlight=stop#using-the-stop-instruction
             Instruction::STOP => unimplemented!("STOP instruction is not supported currently."),
-        }
+        };
+        // Convert MCycles to TCycles.
+        (res.0, res.1 * 4)
     }
 
     // https://rgbds.gbdev.io/docs/v0.9.0/gbz80.7
@@ -899,7 +967,7 @@ impl CPU {
 
         self.registers.f.zero = res == 0;
         self.registers.f.subtract = false;
-        self.registers.f.half_carry = val == HALF_CARRY_MASK;
+        self.registers.f.half_carry = (val & HALF_CARRY_MASK) + 1 > HALF_CARRY_MASK;
 
         res
     }
@@ -919,7 +987,7 @@ impl CPU {
     }
 
     fn decrement_u16(&self, val: u16) -> u16 {
-        val.overflowing_add(1).0
+        val.overflowing_sub(1).0
     }
 
     fn check_bit(&mut self, val: u8, bit_pos: u32) {
@@ -1003,7 +1071,7 @@ impl CPU {
     }
 
     fn swap_bits(&mut self, val: u8) -> u8 {
-        let res = (val << 4) | (val >> 4);
+        let res = val.rotate_right(4);
         self.registers.f.zero = res == 0;
         self.registers.f.subtract = false;
         self.registers.f.half_carry = false;
@@ -1017,13 +1085,13 @@ impl CPU {
             instruction::JumpTest::Zero => self.registers.f.zero,
             instruction::JumpTest::NotZero => !self.registers.f.zero,
             instruction::JumpTest::Carry => self.registers.f.carry,
-            instruction::JumpTest::NotCarry => self.registers.f.carry,
+            instruction::JumpTest::NotCarry => !self.registers.f.carry,
             instruction::JumpTest::Always => true,
         }
     }
 
     #[must_use]
-    fn jump_relative(&mut self, addr: u16, jump: bool) -> (u16, usize) {
+    fn jump_relative(&mut self, addr: u16, jump: bool) -> (u16, u32) {
         if jump {
             (self.pc.wrapping_add(2).wrapping_add(addr), 3)
         } else {
@@ -1032,7 +1100,7 @@ impl CPU {
     }
 
     #[must_use]
-    fn jump_absolute(&mut self, addr: u16, jump: bool) -> (u16, usize) {
+    fn jump_absolute(&mut self, addr: u16, jump: bool) -> (u16, u32) {
         if jump {
             (addr, 4)
         } else {
@@ -1041,7 +1109,7 @@ impl CPU {
     }
 
     #[must_use]
-    fn call(&mut self, addr: u16, jump: bool) -> (u16, usize) {
+    fn call(&mut self, addr: u16, jump: bool) -> (u16, u32) {
         if jump {
             self.push_stack(self.pc.wrapping_add(3));
             (addr, 6)
@@ -1071,10 +1139,9 @@ impl CPU {
     }
 
     fn push_stack(&mut self, val: u16) {
+        self.memory.write_byte(self.sp.wrapping_sub(2), val as u8);
         self.memory
             .write_byte(self.sp.wrapping_sub(1), (val >> u8::BITS) as u8);
-        self.memory
-            .write_byte(self.sp.wrapping_sub(2), (val >> u8::BITS) as u8);
 
         self.sp = self.sp.wrapping_sub(2);
     }
@@ -1096,8 +1163,15 @@ mod test {
 
     #[test]
     fn instruction_swap_bits() {
-        let mut cpu = CPU::new();
-        let mut flag = registers::FlagsRegister::new();
+        env_logger::try_init().unwrap();
+
+        let mut cpu = CPU::new(&[]);
+        let mut flag = registers::FlagsRegister {
+            zero: false,
+            subtract: false,
+            half_carry: false,
+            carry: false,
+        };
 
         assert_eq!(cpu.swap_bits(0xFD), 0xDF);
         assert_eq!(cpu.registers.f, flag);
@@ -1105,5 +1179,21 @@ mod test {
         assert_eq!(cpu.swap_bits(0x00), 0x00);
         flag.zero = true;
         assert_eq!(cpu.registers.f, flag);
+    }
+
+    #[test]
+    fn different_n8_cast() {
+        let a = -10i8;
+        let b = a as u8;
+        assert_eq!(b.wrapping_add(10), 0);
+
+        let addr = -32i8 as u8;
+        assert_eq!(addr as i8, -32);
+        assert_eq!(addr as i8 as i16, -32);
+        assert_eq!((addr as i8 as i16 as u16).wrapping_add(32), 0);
+
+        assert_eq!(126i8 as u8, 126);
+        assert_eq!(-126i8 as u8, 130);
+        assert_eq!(130u8 as i8, -126);
     }
 }

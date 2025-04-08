@@ -4,6 +4,7 @@ List of abbreviations used in this document:
 
 Inspired by <https://github.com/rylev/DMG-01/blob/00bed9baedab5548d63d646f60acb7af4b3e3658/lib-dmg-01/src/cpu/instruction.rs>
 */
+#[derive(Copy, Clone, Debug)]
 pub enum Instruction {
     // Arithmetic instruction
     /// Add the `ArithmeticTarget` value to register A.
@@ -81,6 +82,7 @@ pub enum Instruction {
     STOP,
 }
 
+#[derive(Copy, Clone, Debug)]
 pub enum LoadType {
     Byte(LoadByteTarget, LoadByteSource),
     /// Copy the value U16 into register R16.
@@ -94,6 +96,7 @@ pub enum LoadType {
     HLFromSPN,
 }
 
+#[derive(Copy, Clone, Debug)]
 pub enum IndirectTarget {
     /// Address $FF00 + C(register).
     C,
@@ -107,6 +110,7 @@ pub enum IndirectTarget {
     HLD,
 }
 
+#[derive(Copy, Clone, Debug)]
 pub enum LoadByteTarget {
     A,
     B,
@@ -118,6 +122,7 @@ pub enum LoadByteTarget {
     HLP,
 }
 
+#[derive(Copy, Clone, Debug)]
 pub enum LoadByteSource {
     A,
     B,
@@ -130,6 +135,7 @@ pub enum LoadByteSource {
     U8,
 }
 
+#[derive(Copy, Clone, Debug)]
 pub enum LoadWordTarget {
     BC,
     DE,
@@ -137,6 +143,7 @@ pub enum LoadWordTarget {
     SP,
 }
 
+#[derive(Copy, Clone, Debug)]
 pub enum ADDHLTarget {
     BC,
     DE,
@@ -144,6 +151,7 @@ pub enum ADDHLTarget {
     SP,
 }
 
+#[derive(Copy, Clone, Debug)]
 pub enum IncDecTarget {
     A,
     B,
@@ -159,6 +167,7 @@ pub enum IncDecTarget {
     SP,
 }
 
+#[derive(Copy, Clone, Debug)]
 pub enum StackTarget {
     AF,
     BC,
@@ -166,6 +175,7 @@ pub enum StackTarget {
     HL,
 }
 
+#[derive(Copy, Clone, Debug)]
 pub enum ArithmeticTarget {
     A,
     B,
@@ -178,6 +188,7 @@ pub enum ArithmeticTarget {
     U8,
 }
 
+#[derive(Copy, Clone, Debug)]
 pub enum PrefixTarget {
     A,
     B,
@@ -190,6 +201,7 @@ pub enum PrefixTarget {
 }
 
 /// An RST vector (0x00, 0x08, 0x10, 0x18, 0x20, 0x28, 0x30, and 0x38).
+#[derive(Copy, Clone, Debug)]
 pub enum VEC {
     X00,
     X08,
@@ -202,8 +214,8 @@ pub enum VEC {
 }
 
 impl VEC {
-    pub fn to_addr(&self) -> u16 {
-        match *self {
+    pub fn to_addr(self) -> u16 {
+        match self {
             VEC::X00 => 0x00,
             VEC::X08 => 0x08,
             VEC::X10 => 0x10,
@@ -217,7 +229,7 @@ impl VEC {
 }
 
 /// A condition code.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum JumpTest {
     Zero,
     NotZero,
@@ -227,6 +239,7 @@ pub enum JumpTest {
 }
 
 /// 3-bit unsigned bit index (0 to 7).
+#[derive(Copy, Clone, Debug)]
 pub enum BitPosition {
     B0 = 0,
     B1,

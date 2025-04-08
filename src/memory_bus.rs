@@ -1,10 +1,10 @@
 // https://gbdev.io/pandocs/Memory_Map.html
 
-use crate::{bit, gpu::GPU};
-
-pub const BOOT_ROM_START: u16 = 0x0000;
-pub const BOOT_ROM_END: u16 = 0x00FF;
-pub const BOOT_ROM_SIZE: usize = (BOOT_ROM_END - BOOT_ROM_START + 1) as usize;
+use crate::{
+    bit,
+    gpu::GPU,
+    joypad::{Joypad, JoypadKey},
+};
 
 pub const ROM_BANK_0_START: u16 = 0x0000;
 pub const ROM_BANK_0_END: u16 = 0x3FFF;
@@ -50,20 +50,19 @@ pub const HIGH_RAM_AREA_SIZE: usize = (HIGH_RAM_AREA_END - HIGH_RAM_AREA_START +
 pub const INTERRUPT_ENABLED_REGISTER: u16 = 0xFFFF;
 
 pub struct MemoryBus {
-    boot_rom: [u8; BOOT_ROM_SIZE],
     rom_bank_0: [u8; ROM_BANK_0_SIZE],
     rom_bank_n: [u8; ROM_BANK_N_SIZE],
     external_ram: [u8; EXTERNAL_RAM_SIZE],
     /// Working RAM.
     wram: [u8; WORKING_RAM_SIZE],
 
-    gpu: GPU,
+    pub gpu: GPU,
 
     // IO registers:
     interrupt_enable: InterruptFlags,
-    interrupt_flag: InterruptFlags,
+    // TODO: Remove pub
+    pub interrupt_flag: InterruptFlags,
     joypad: Joypad,
-    // TODO: Increment divider and timer.
     divider: Timer,
     timer: Timer,
 
@@ -71,31 +70,8 @@ pub struct MemoryBus {
     hram: [u8; HIGH_RAM_AREA_SIZE],
 }
 
-#[derive(Copy, Clone)]
-pub struct Joypad {
-    mode: JoypadMode,
-    down: bool,
-    up: bool,
-    left: bool,
-    right: bool,
-    start: bool,
-    select: bool,
-    b: bool,
-    a: bool,
-}
-
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub enum JoypadMode {
-    // Down, Up, Left, Right
-    Dpad,
-    // Start, Select, B, A
-    Buttons,
-    // QUESTION: Do we really need `None`?
-    None,
-}
-
 #[derive(Copy, Clone, Default)]
-enum TimerRateHz {
+pub enum TimerRateHz {
     #[default]
     F4096,
     F262144,
@@ -103,11 +79,10 @@ enum TimerRateHz {
     F16384,
 }
 
-// TODO
 #[derive(Copy, Clone, Default)]
 pub struct Timer {
     freq: TimerRateHz,
-    cycles: usize,
+    cycles: u32,
     pub val: u8,
     /// When TIMA overflows, it is reset to the value in this register and an
     /// interrupt is requested.
@@ -115,7 +90,7 @@ pub struct Timer {
     pub enable: bool,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct InterruptFlags {
     vblank: bool,
     lcd: bool,
@@ -125,9 +100,8 @@ pub struct InterruptFlags {
 }
 
 impl MemoryBus {
-    pub fn new() -> Self {
-        Self {
-            boot_rom: [0; BOOT_ROM_SIZE],
+    pub fn new(game_rom: &[u8]) -> Self {
+        let mut bus = Self {
             rom_bank_0: [0; ROM_BANK_0_SIZE],
             rom_bank_n: [0; ROM_BANK_N_SIZE],
             external_ram: [0; EXTERNAL_RAM_SIZE],
@@ -142,10 +116,79 @@ impl MemoryBus {
             interrupt_flag: InterruptFlags::new(),
 
             hram: [0; HIGH_RAM_AREA_SIZE],
+        };
+
+        bus.divider.enable = true;
+
+        use std::cmp::min;
+
+        let bank0_len = min(bus.rom_bank_0.len(), game_rom.len());
+        bus.rom_bank_0[..bank0_len].copy_from_slice(&game_rom[..bank0_len]);
+
+        if game_rom.len() > ROM_BANK_0_SIZE {
+            assert!(
+                game_rom.len() <= ROM_BANK_N_END as usize,
+                "Max supported size is {}, got {}.",
+                ROM_BANK_N_END,
+                game_rom.len()
+            );
+
+            let bankn_len = game_rom.len() - bank0_len;
+            bus.rom_bank_n[..bankn_len].copy_from_slice(&game_rom[bank0_len..]);
+        }
+
+        bus.set_init_values();
+
+        bus
+    }
+
+    fn set_init_values(&mut self) {
+        self.write_byte(0xFF05, 0);
+        self.write_byte(0xFF06, 0);
+        self.write_byte(0xFF07, 0);
+        self.write_byte(0xFF10, 0x80);
+        self.write_byte(0xFF11, 0xBF);
+        self.write_byte(0xFF12, 0xF3);
+        self.write_byte(0xFF14, 0xBF);
+        self.write_byte(0xFF16, 0x3F);
+        self.write_byte(0xFF16, 0x3F);
+        self.write_byte(0xFF17, 0);
+        self.write_byte(0xFF19, 0xBF);
+        self.write_byte(0xFF1A, 0x7F);
+        self.write_byte(0xFF1B, 0xFF);
+        self.write_byte(0xFF1C, 0x9F);
+        self.write_byte(0xFF1E, 0xFF);
+        self.write_byte(0xFF20, 0xFF);
+        self.write_byte(0xFF21, 0);
+        self.write_byte(0xFF22, 0);
+        self.write_byte(0xFF23, 0xBF);
+        self.write_byte(0xFF24, 0x77);
+        self.write_byte(0xFF25, 0xF3);
+        self.write_byte(0xFF26, 0xF1);
+        self.write_byte(0xFF40, 0x91);
+        self.write_byte(0xFF42, 0);
+        self.write_byte(0xFF43, 0);
+        self.write_byte(0xFF45, 0);
+        self.write_byte(0xFF47, 0xFC);
+        self.write_byte(0xFF48, 0xFF);
+        self.write_byte(0xFF49, 0xFF);
+        self.write_byte(0xFF4A, 0);
+        self.write_byte(0xFF4B, 0);
+    }
+
+    pub fn key_up(&mut self, key: JoypadKey) {
+        if self.joypad.key_up(key) {
+            self.interrupt_flag.joypad = true;
         }
     }
 
-    pub fn step(&mut self, cycles: usize) {
+    pub fn key_down(&mut self, key: JoypadKey) {
+        if self.joypad.key_down(key) {
+            self.interrupt_flag.joypad = true;
+        }
+    }
+
+    pub fn step(&mut self, cycles: u32) -> u32 {
         self.divider.step(cycles);
 
         if self.timer.step(cycles) {
@@ -153,15 +196,14 @@ impl MemoryBus {
         }
 
         let inter = self.gpu.step(cycles);
-        self.interrupt_flag.vblank = inter.vblank;
-        self.interrupt_flag.lcd = inter.lcd;
+        self.interrupt_flag.vblank |= inter.vblank;
+        self.interrupt_flag.lcd |= inter.lcd;
+
+        cycles
     }
 
-    // pub fn has_interrupt(&self) -> bool {
-    //     u8::from(self.interrupt_enable) & u8::from(self.interrupt_flag) != 0
-    // }
-
     pub fn vbank_interrupt(&self) -> bool {
+        // dbg!(self.interrupt_enable.vblank, self.interrupt_flag.vblank);
         self.interrupt_enable.vblank && self.interrupt_flag.vblank
     }
     pub fn reset_vbank_interrupt(&mut self) {
@@ -198,7 +240,6 @@ impl MemoryBus {
 
     pub fn read_byte(&self, addr: u16) -> u8 {
         match addr {
-            BOOT_ROM_START..=BOOT_ROM_END => self.boot_rom[(addr - BOOT_ROM_START) as usize],
             ROM_BANK_0_START..=ROM_BANK_0_END => {
                 self.rom_bank_0[(addr - ROM_BANK_0_START) as usize]
             }
@@ -210,9 +251,9 @@ impl MemoryBus {
                 self.external_ram[(addr - EXTERNAL_RAM_START) as usize]
             }
             WORKING_RAM_START..=WORKING_RAM_END => self.wram[(addr - WORKING_RAM_START) as usize],
-            ECHO_RAM_START..=ECHO_RAM_END => panic!(r#"Use of "Echo RAM" memory section."#),
+            ECHO_RAM_START..=ECHO_RAM_END => self.wram[(addr - ECHO_RAM_START) as usize],
             OAM_START..=OAM_END => self.gpu.oam[(addr - OAM_START) as usize],
-            UNUSED_START..=UNUSED_END => panic!(r#"Use of "Not Usable" memory section."#),
+            UNUSED_START..=UNUSED_END => 0,
             IO_REGISTERS_START..=IO_REGISTERS_END => self.read_io_register(addr),
             HIGH_RAM_AREA_START..=HIGH_RAM_AREA_END => {
                 self.hram[(addr - HIGH_RAM_AREA_START) as usize]
@@ -222,19 +263,22 @@ impl MemoryBus {
     }
 
     pub fn read_high_byte(&self, addr: u8) -> u8 {
-        let addr = IO_REGISTERS_START as u16 + addr as u16;
+        let addr = IO_REGISTERS_START | addr as u16;
         self.read_byte(addr)
     }
 
-    // TODO
     pub fn write_byte(&mut self, addr: u16, val: u8) {
+        // eprintln!("0x{addr:X} = {val}");
         match addr {
-            BOOT_ROM_START..=BOOT_ROM_END => panic!("Boot ROM cannot be overwritten."),
             ROM_BANK_0_START..=ROM_BANK_0_END => {
                 self.rom_bank_0[(addr - ROM_BANK_0_START) as usize] = val
             }
             ROM_BANK_N_START..=ROM_BANK_N_END => {
-                self.rom_bank_n[(addr - ROM_BANK_N_START) as usize] = val
+                panic!(
+                    "Changing ROM Bank memory is forbidden: addr = 0x{:X}, val = 0x{:X}",
+                    addr, val
+                );
+                // self.rom_bank_n[(addr - ROM_BANK_N_START) as usize] = val
             }
             VIDEO_RAM_START..=VIDEO_RAM_END => {
                 self.gpu.vram[(addr - VIDEO_RAM_START) as usize] = val
@@ -245,9 +289,11 @@ impl MemoryBus {
             WORKING_RAM_START..=WORKING_RAM_END => {
                 self.wram[(addr - WORKING_RAM_START) as usize] = val
             }
-            ECHO_RAM_START..=ECHO_RAM_END => panic!(r#"Use of "Echo RAM" memory section."#),
+            ECHO_RAM_START..=ECHO_RAM_END => self.wram[(addr - ECHO_RAM_START) as usize] = val,
             OAM_START..=OAM_END => self.gpu.oam[(addr - OAM_START) as usize] = val,
-            UNUSED_START..=UNUSED_END => panic!(r#"Use of "Not Usable" memory section."#),
+            UNUSED_START..=UNUSED_END => {
+                // Writing here does nothing.
+            }
             IO_REGISTERS_START..=IO_REGISTERS_END => self.write_io_register(addr, val),
             HIGH_RAM_AREA_START..=HIGH_RAM_AREA_END => {
                 self.hram[(addr - HIGH_RAM_AREA_START) as usize] = val
@@ -257,18 +303,20 @@ impl MemoryBus {
     }
 
     pub fn write_high_byte(&mut self, addr: u8, val: u8) {
-        let addr = IO_REGISTERS_START as u16 + addr as u16;
+        let addr = IO_REGISTERS_START + addr as u16;
         self.write_byte(addr, val);
     }
 
     // https://gbdev.io/pandocs/Memory_Map.html#io-ranges
-    // TODO
     fn read_io_register(&self, addr: u16) -> u8 {
         assert!((IO_REGISTERS_START..=IO_REGISTERS_END).contains(&addr));
 
         match addr {
             0xFF00 => u8::from(self.joypad),
-            0xFF01..=0xFF02 => unimplemented!("Serial Transfer"),
+            0xFF01..=0xFF02 => {
+                // TODO: Serial transfer read.
+                0
+            }
             0xFF04 => self.divider.val,
             0xFF05 => self.timer.val,
             0xFF06 => self.timer.modulo,
@@ -281,8 +329,10 @@ impl MemoryBus {
                 }) | ((self.timer.enable as u8) << 2)
             }
             0xFF0F => u8::from(self.interrupt_flag),
-            0xFF10..=0xFF26 => unimplemented!("Audio registers are not supported yet."),
-            0xFF30..=0xFF3F => unimplemented!("Wave pattern registers are not supported yet."),
+            0xFF10..=0xFF26 => unimplemented!("Reading from Audio registers is not supported yet."),
+            0xFF30..=0xFF3F => {
+                unimplemented!("Reading from Wave pattern registers is not supported yet.")
+            }
             0xFF40 => u8::from(self.gpu.lcd_control),
             0xFF41 => self.gpu.lcd_status.get_status_byte(),
             0xFF42 => self.gpu.viewport.y,
@@ -294,17 +344,18 @@ impl MemoryBus {
             0xFF49 => u8::from(self.gpu.obj1_colors),
             0xFF4A => self.gpu.window.y,
             0xFF4B => self.gpu.window.x,
-            _ => unimplemented!(),
+            _ => panic!("Reading from addr 0x{addr:X} is forbidden."),
         }
     }
 
-    // TODO
     fn write_io_register(&mut self, addr: u16, val: u8) {
         assert!((IO_REGISTERS_START..=IO_REGISTERS_END).contains(&addr));
 
         match addr {
             0xFF00 => self.joypad.set_mode(val),
-            0xFF01..=0xFF02 => unimplemented!("Serial Transfer"),
+            0xFF01..=0xFF02 => {
+                // TODO: Serial transfer write.
+            }
             0xFF04 => self.divider.val = 0,
             0xFF05 => self.timer.val = val,
             0xFF06 => self.timer.modulo = val,
@@ -319,12 +370,27 @@ impl MemoryBus {
                 self.timer.enable = val & (1 << 2) != 0;
             }
             0xFF0F => self.interrupt_flag = InterruptFlags::from(val),
-            0xFF40 => self.gpu.lcd_control = crate::gpu::LcdControl::from(val),
+            0xFF10..=0xFF26 => {
+                // TODO: Audio.
+            }
+            0xFF30..=0xFF3F => {
+                // TODO: Wave pattern.
+            }
+            0xFF40 => {
+                let inter = self.gpu.set_lcd_control(val);
+                self.interrupt_flag.vblank |= inter.vblank;
+                self.interrupt_flag.lcd |= inter.lcd;
+            }
             0xFF41 => self.gpu.lcd_status.write_byte_to_status(val),
             0xFF42 => self.gpu.viewport.y = val,
             0xFF43 => self.gpu.viewport.x = val,
             0xFF44 => panic!("LCD Y coordinate is read-only."),
-            0xFF45 => self.gpu.lcd_status.lyc = val,
+            0xFF45 => {
+                self.gpu.lcd_status.lyc = val;
+                if self.gpu.lcd_status.compare_lines() {
+                    self.interrupt_flag.lcd = true;
+                }
+            }
             0xFF46 => {
                 // Writing to this register starts a DMA transfer from ROM or
                 // RAM to OAM (Object Attribute Memory). The transfer takes 160
@@ -337,11 +403,15 @@ impl MemoryBus {
             0xFF49 => self.gpu.obj1_colors = super::gpu::BackgroundColors::from(val & !0b11),
             0xFF4A => self.gpu.window.y = val,
             0xFF4B => self.gpu.window.x = val,
+            0xFF7F..=0xFF7F => {
+                // Writing here does nothing.
+            }
             _ => panic!("Cannot write to memory location 0x{addr:X}"),
         }
     }
 
     fn dma_transfer(&mut self, addr: u16) {
+        // TODO: Use OAM_START/END.
         const DMA_DEST_START: u16 = 0xFE00;
         const DMA_DEST_END: u16 = 0xFE9F;
 
@@ -354,70 +424,9 @@ impl MemoryBus {
     }
 }
 
-impl Joypad {
-    pub fn new() -> Self {
-        Self {
-            mode: JoypadMode::None,
-            down: false,
-            up: false,
-            left: false,
-            right: false,
-            start: false,
-            select: false,
-            b: false,
-            a: false,
-        }
-    }
-
-    pub fn set_mode(&mut self, val: u8) {
-        if val == 0x20 {
-            self.mode = JoypadMode::Dpad;
-        } else if val == 0x30 {
-            self.mode = JoypadMode::Buttons;
-        } else {
-            panic!("Only 4-5th bits can be written to joypad register.");
-        }
-    }
-
-    fn is_dpad(&self) -> bool {
-        self.mode == JoypadMode::Dpad
-    }
-
-    fn is_buttons(&self) -> bool {
-        self.mode == JoypadMode::Buttons
-    }
-
-    fn bit0(&self) -> bool {
-        (self.a && self.is_buttons()) || (self.right && self.is_dpad())
-    }
-
-    fn bit1(&self) -> bool {
-        (self.b && self.is_buttons()) || (self.left && self.is_dpad())
-    }
-
-    fn bit2(&self) -> bool {
-        (self.select && self.is_buttons()) || (self.up && self.is_dpad())
-    }
-
-    fn bit3(&self) -> bool {
-        (self.start && self.is_buttons()) || (self.down && self.is_dpad())
-    }
-}
-
-impl From<Joypad> for u8 {
-    fn from(v: Joypad) -> Self {
-        (v.bit0() as u8)
-            | ((v.bit1() as u8) << 1)
-            | ((v.bit2() as u8) << 2)
-            | ((v.bit3() as u8) << 3)
-            | ((v.is_dpad() as u8) << 4)
-            | ((v.is_buttons() as u8) << 5)
-    }
-}
-
 impl TimerRateHz {
-    pub const fn per_cpu_cycle(&self) -> usize {
-        use crate::cpu::CPU_FREQ;
+    pub const fn per_cpu_cycle(&self) -> u32 {
+        use crate::CPU_FREQ;
         match self {
             TimerRateHz::F4096 => CPU_FREQ / 4096,
             TimerRateHz::F262144 => CPU_FREQ / 262144,
@@ -434,26 +443,24 @@ impl Timer {
             cycles: 0,
             val: 0,
             modulo: 0,
-            enable: true,
+            enable: false,
         }
     }
 
     /// # Returns
     ///
     /// Whether overflow occurs.
-    pub fn step(&mut self, cpu_cycles: usize) -> bool {
+    pub fn step(&mut self, cpu_cycles: u32) -> bool {
         if !self.enable {
             return false;
         }
 
         self.cycles += cpu_cycles;
 
-        let overflow = if self.cycles > self.freq.per_cpu_cycle() {
-            let (new_val, overflow) = self
-                .val
-                .overflowing_add(u8::try_from(self.cycles / self.freq.per_cpu_cycle()).unwrap());
+        let overflow = if self.cycles >= self.freq.per_cpu_cycle() {
+            let (new_val, overflow) = self.val.overflowing_add(1);
 
-            self.cycles %= self.freq.per_cpu_cycle();
+            self.cycles -= self.freq.per_cpu_cycle();
             self.val = new_val;
 
             overflow
