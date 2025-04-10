@@ -311,7 +311,7 @@ impl GPU {
                     x
                 };
 
-                let y = self.viewport.y + self.lcd_status.ly;
+                let y = self.viewport.y.wrapping_add(self.lcd_status.ly);
                 let tile_y = if use_window && self.window.y <= y {
                     y - self.window.y
                 } else {

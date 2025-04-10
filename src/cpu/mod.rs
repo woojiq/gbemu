@@ -67,7 +67,11 @@ impl CPU {
 
         // log::trace!("Parsed instruction {instruction:?}.");
 
-        let (new_pc, cycles) = self.execute(instruction);
+        let (new_pc, cycles) = if self.is_halted {
+            (self.pc, 1)
+        } else {
+            self.execute(instruction)
+        };
 
         // eprintln!(
         //     "Instruction {instruction:?} executed, cycles = {cycles}, new_pc = 0x{new_pc:X}."
@@ -108,6 +112,10 @@ impl CPU {
 
     fn process_interrupts(&mut self) -> u32 {
         // dbg!(self.interrupts_enabled);
+        if self.memory.pending_interrupt() {
+            self.is_halted = false;
+        }
+
         if !self.interrupts_enabled {
             return 0;
         }
@@ -147,10 +155,10 @@ impl CPU {
         if byte == Self::INSTRUCTION_PREFIX {
             let byte = self.read_next_byte();
             Instruction::from_byte(byte, true)
-                .unwrap_or_else(|| panic!("Prefixed instruction 0x{byte:X} exists"))
+                .unwrap_or_else(|| panic!("Prefixed instruction 0x{byte:X} doesn't exist exist."))
         } else {
             Instruction::from_byte(byte, false)
-                .unwrap_or_else(|| panic!("Not prefixed instruction 0x{byte:X} exists"))
+                .unwrap_or_else(|| panic!("Not prefixed instruction 0x{byte:X} doesn't exist."))
         }
     }
 
@@ -934,6 +942,7 @@ impl CPU {
         !self.registers.a
     }
 
+    // https://blog.ollien.com/posts/gb-daa/
     // https://forums.nesdev.org/viewtopic.php?t=15944
     fn decimal_adjust_accum(&mut self, mut val: u8) -> u8 {
         let mut carry = false;
@@ -949,6 +958,7 @@ impl CPU {
         } else {
             if self.registers.f.carry {
                 val = val.wrapping_sub(0x60);
+                carry = true;
             }
             if self.registers.f.half_carry {
                 val = val.wrapping_sub(0x06);
@@ -1011,28 +1021,28 @@ impl CPU {
     }
 
     fn rotate_left(&mut self, val: u8, through_carry: bool, set_zero: bool) -> u8 {
-        let res = val.wrapping_shl(1)
+        let res = (val << 1)
             + if through_carry {
-                val >> (u8::BITS - 1)
-            } else {
                 self.registers.f.carry as u8
+            } else {
+                val >> (u8::BITS - 1)
             };
 
         self.registers.f.zero = set_zero && (res == 0);
         self.registers.f.subtract = false;
         self.registers.f.half_carry = false;
-        self.registers.f.carry = val.overflowing_shl(1).1;
+        self.registers.f.carry = (val >> (u8::BITS - 1)) == 1;
 
         res
     }
 
     fn shift_left_arith(&mut self, val: u8) -> u8 {
-        let res = val.wrapping_shl(1);
+        let res = val << 1;
 
         self.registers.f.zero = res == 0;
         self.registers.f.subtract = false;
         self.registers.f.half_carry = false;
-        self.registers.f.carry = val.overflowing_shl(1).1;
+        self.registers.f.carry = (val >> (u8::BITS - 1)) == 1;
 
         res
     }
@@ -1042,7 +1052,7 @@ impl CPU {
             | if through_carry {
                 (self.registers.f.carry as u8) << (u8::BITS - 1)
             } else {
-                0
+                (val & 1) << (u8::BITS - 1)
             };
 
         self.registers.f.zero = set_zero && (res == 0);
@@ -1053,7 +1063,7 @@ impl CPU {
         res
     }
 
-    /// Shift Right Arithmetically.
+    /// Shift Right arithmetically or logically.
     fn shift_right(&mut self, val: u8, save_msb: bool) -> u8 {
         let res = (val >> 1)
             | if save_msb {

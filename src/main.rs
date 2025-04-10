@@ -32,6 +32,7 @@ fn main() {
 
     env_logger::try_init().unwrap();
 
+    // TODO: Support rom banks.
     let content = read_bytes_from_file(&args.rom_path);
     info!("Read ROM with size 0x{:X}.", content.len());
 

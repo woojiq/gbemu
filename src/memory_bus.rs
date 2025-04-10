@@ -60,8 +60,7 @@ pub struct MemoryBus {
 
     // IO registers:
     interrupt_enable: InterruptFlags,
-    // TODO: Remove pub
-    pub interrupt_flag: InterruptFlags,
+    interrupt_flag: InterruptFlags,
     joypad: Joypad,
     divider: Timer,
     timer: Timer,
@@ -200,6 +199,10 @@ impl MemoryBus {
         self.interrupt_flag.lcd |= inter.lcd;
 
         cycles
+    }
+
+    pub fn pending_interrupt(&self) -> bool {
+        u8::from(self.interrupt_enable) & u8::from(self.interrupt_flag) != 0
     }
 
     pub fn vbank_interrupt(&self) -> bool {

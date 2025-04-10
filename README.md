@@ -1,6 +1,10 @@
 # Game Boy Emulator
 
-# Resources
+## List of passed tests
+
+* blargg/cpu_instrs/*
+
+## Resources
 
 A curated list of awesome Game Boy resources: https://gbdev.io/resources.html
 
