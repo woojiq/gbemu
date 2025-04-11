@@ -344,7 +344,7 @@ impl MemoryBus {
             0xFF42 => self.gpu.viewport.y,
             0xFF43 => self.gpu.viewport.x,
             0xFF44 => self.gpu.lcd_status.ly(),
-            0xFF45 => self.gpu.lcd_status.lyc,
+            0xFF45 => self.gpu.lcd_status.lyc(),
             0xFF47 => u8::from(self.gpu.bg_colors),
             0xFF48 => u8::from(self.gpu.obj0_colors),
             0xFF49 => u8::from(self.gpu.obj1_colors),
@@ -392,8 +392,7 @@ impl MemoryBus {
             0xFF43 => self.gpu.viewport.x = val,
             0xFF44 => panic!("LCD Y coordinate is read-only."),
             0xFF45 => {
-                self.gpu.lcd_status.lyc = val;
-                if self.gpu.lcd_status.compare_lines() {
+                if self.gpu.lcd_status.set_lyc(val) {
                     self.interrupt_flag.lcd = true;
                 }
             }

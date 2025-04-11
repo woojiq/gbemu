@@ -1,8 +1,11 @@
+mod lcd_registers;
+
 use crate::{
     bit,
     memory_bus::{OAM_END, OAM_SIZE, OAM_START, VIDEO_RAM_SIZE, VIDEO_RAM_START},
     SCREEN_HEIGHT, SCREEN_WIDTH,
 };
+use lcd_registers::{LcdControl, LcdStatus};
 
 pub struct GPU {
     // 3: RGB
@@ -25,57 +28,6 @@ pub struct GPU {
 
     // TODO: Remove pub.
     pub cycles: u32,
-}
-
-#[derive(Copy, Clone)]
-pub struct LcdControl {
-    // starting from bit 7:
-    /// This bit controls whether the LCD is on and the PPU is active. Setting
-    /// it to 0 turns both off, which grants immediate and full access to VRAM,
-    /// OAM, etc.
-    pub lcd_enable: bool,
-    /// This bit controls which background map the Window uses for rendering.
-    /// When it’s clear (0), the $9800 tilemap is used, otherwise it’s the $9C00
-    /// one.
-    pub window_tile_map_area: bool,
-    /// This bit controls whether the window shall be displayed or not.
-    pub window_enable: bool,
-    /// This bit controls which addressing mode the BG and Window use to pick
-    /// tiles.
-    pub bg_and_window_tile_data_area: bool,
-    /// If the bit is clear (0), the BG uses tilemap $9800, otherwise tilemap
-    /// $9C00.
-    pub bg_tile_map_area: bool,
-    /// This bit controls the size of all objects (1 tile or 2 stacked
-    /// vertically).
-    pub obj_size: bool,
-    /// This bit toggles whether objects are displayed or not.
-    pub obj_enable: bool,
-    /// When Bit 0 is cleared, both background and window become blank (white),
-    /// and the Window Display Bit is ignored in that case. Only objects may
-    /// still be displayed (if enabled in Bit 1).
-    pub bg_and_window_display: bool,
-}
-
-#[derive(Copy, Clone)]
-pub struct LcdStatus {
-    // FF41 — STAT: LCD status
-    pub lyc_int_select: bool,
-    /// Mode 2
-    pub oam_scan_interrupt: bool,
-    /// Mode 1
-    pub vblank_interrupt: bool,
-    /// Mode 0
-    pub hblank_interrupt: bool,
-    // read-only
-    same_line_check: bool,
-    ppu_mode: PpuMode,
-
-    // FF44 — LY: LCD Y coordinate [read-only]
-    ly: u8,
-
-    // FF45 — LYC: LY compare
-    pub lyc: u8,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -173,7 +125,9 @@ impl GPU {
             self.cycles = 4;
         } else if self.lcd_control.lcd_enable && !new.lcd_enable {
             self.cycles = 0;
-            self.lcd_status.ly = 0;
+            if self.lcd_status.set_line(0) {
+                inter.lcd = true;
+            }
             self.lcd_status.ppu_mode = PpuMode::HBlank;
             self.clear_screen();
         }
@@ -222,20 +176,21 @@ impl GPU {
 
             if self.cycles >= SCANLINE_DOTS {
                 self.cycles -= SCANLINE_DOTS;
-                self.lcd_status.ly = (self.lcd_status.ly + 1) % (LAST_SCANLINE + 1);
-
-                if self.lcd_status.compare_lines() {
+                if self
+                    .lcd_status
+                    .set_line((self.lcd_status.line() + 1) % (LAST_SCANLINE + 1))
+                {
                     inter.lcd = true;
                 }
 
                 if self.lcd_status.ppu_mode != PpuMode::VBlank
-                    && self.lcd_status.ly > LAST_VISIBLE_SCANLINE
+                    && self.lcd_status.line() > LAST_VISIBLE_SCANLINE
                 {
                     self.switch_to_mode(PpuMode::VBlank, &mut inter);
                 }
             }
 
-            if self.lcd_status.ly <= LAST_VISIBLE_SCANLINE {
+            if self.lcd_status.line() <= LAST_VISIBLE_SCANLINE {
                 if self.cycles <= OAM_SCAN_DOTS {
                     if self.lcd_status.ppu_mode != PpuMode::OAMScan {
                         self.switch_to_mode(PpuMode::OAMScan, &mut inter);
@@ -296,7 +251,7 @@ impl GPU {
         // background is 256x256. Each tile is 8x8 pixels x2 (for color) = 16 byte.
         // background is 32x32 tiles. Each tile 16 bytes.
 
-        let use_window = self.lcd_control.window_enable && self.window.y <= self.lcd_status.ly;
+        let use_window = self.lcd_control.window_enable && self.window.y <= self.lcd_status.line();
 
         if !self.lcd_control.bg_and_window_display {
             return;
@@ -311,7 +266,7 @@ impl GPU {
                     x
                 };
 
-                let y = self.viewport.y.wrapping_add(self.lcd_status.ly);
+                let y = self.viewport.y.wrapping_add(self.lcd_status.line());
                 let tile_y = if use_window && self.window.y <= y {
                     y - self.window.y
                 } else {
@@ -369,7 +324,7 @@ impl GPU {
                 self.bg_colors.get()[color_raw as usize].rgb()
             };
 
-            self.buffer[screen_x as usize][self.lcd_status.ly as usize] = [color, color, color];
+            self.buffer[screen_x as usize][self.lcd_status.line() as usize] = [color, color, color];
         }
     }
 
@@ -389,13 +344,13 @@ impl GPU {
                 .unwrap();
             let obj = Oam::from(mem);
 
-            if !(obj.pos.y <= self.lcd_status.ly as i16
-                && (self.lcd_status.ly as i16) < obj.pos.y + obj_height as i16)
+            if !(obj.pos.y <= self.lcd_status.line() as i16
+                && (self.lcd_status.line() as i16) < obj.pos.y + obj_height as i16)
             {
                 continue;
             }
 
-            let mut line = (self.lcd_status.ly as i16 - obj.pos.y) as u16;
+            let mut line = (self.lcd_status.line() as i16 - obj.pos.y) as u16;
             if obj.attrs.y_flip {
                 line = obj_height - line;
             }
@@ -432,79 +387,10 @@ impl GPU {
 
                 let buffer_x = pixel_x + obj.pos.x;
 
-                self.buffer[buffer_x as usize][self.lcd_status.ly as usize] = [color, color, color];
+                self.buffer[buffer_x as usize][self.lcd_status.line() as usize] =
+                    [color, color, color];
             }
         }
-    }
-}
-
-impl LcdControl {
-    pub fn new() -> Self {
-        Self {
-            lcd_enable: false,
-            window_tile_map_area: false,
-            window_enable: false,
-            bg_and_window_tile_data_area: false,
-            bg_tile_map_area: false,
-            obj_size: false,
-            obj_enable: false,
-            bg_and_window_display: false,
-        }
-    }
-}
-
-impl From<LcdControl> for u8 {
-    fn from(val: LcdControl) -> Self {
-        ((val.lcd_enable as u8) << 7)
-            | ((val.window_tile_map_area as u8) << 6)
-            | ((val.window_enable as u8) << 5)
-            | ((val.bg_and_window_tile_data_area as u8) << 4)
-            | ((val.bg_tile_map_area as u8) << 3)
-            | ((val.obj_size as u8) << 2)
-            | ((val.obj_enable as u8) << 1)
-            | ((val.bg_and_window_display as u8) << 0)
-    }
-}
-
-impl LcdStatus {
-    pub fn new() -> Self {
-        Self {
-            lyc_int_select: false,
-            oam_scan_interrupt: false,
-            vblank_interrupt: false,
-            hblank_interrupt: false,
-            same_line_check: false,
-            ppu_mode: PpuMode::HBlank,
-            ly: 0,
-            lyc: 0,
-        }
-    }
-
-    pub fn compare_lines(&mut self) -> bool {
-        self.same_line_check = self.ly == self.lyc;
-
-        self.lyc_int_select && self.same_line_check
-    }
-
-    pub fn write_byte_to_status(&mut self, val: u8) {
-        self.lyc_int_select = bit!(val, 6);
-        self.oam_scan_interrupt = bit!(val, 5);
-        self.vblank_interrupt = bit!(val, 4);
-        self.hblank_interrupt = bit!(val, 3);
-        // Other fields are read-only.
-    }
-
-    pub fn get_status_byte(&self) -> u8 {
-        ((self.lyc_int_select as u8) << 6)
-            | ((self.oam_scan_interrupt as u8) << 5)
-            | ((self.vblank_interrupt as u8) << 4)
-            | ((self.hblank_interrupt as u8) << 3)
-            | ((self.same_line_check as u8) << 2)
-            | u8::from(self.ppu_mode)
-    }
-
-    pub fn ly(&self) -> u8 {
-        self.ly
     }
 }
 
