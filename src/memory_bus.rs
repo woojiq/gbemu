@@ -109,8 +109,8 @@ impl MemoryBus {
             gpu: GPU::new(),
 
             joypad: Joypad::new(),
-            divider: Timer::new(TimerRateHz::F16384),
-            timer: Timer::default(),
+            divider: Timer::new_enabled(TimerRateHz::F16384),
+            timer: Timer::new_disabled(TimerRateHz::F4096),
             interrupt_enable: InterruptFlags::new(),
             interrupt_flag: InterruptFlags::new(),
 
@@ -332,7 +332,10 @@ impl MemoryBus {
                 }) | ((self.timer.enable as u8) << 2)
             }
             0xFF0F => u8::from(self.interrupt_flag),
-            0xFF10..=0xFF26 => unimplemented!("Reading from Audio registers is not supported yet."),
+            0xFF10..=0xFF26 => {
+                0
+                // unimplemented!("Reading from Audio registers is not supported yet."),
+            }
             0xFF30..=0xFF3F => {
                 unimplemented!("Reading from Wave pattern registers is not supported yet.")
             }
@@ -368,7 +371,7 @@ impl MemoryBus {
                     1 => TimerRateHz::F262144,
                     2 => TimerRateHz::F65536,
                     3 => TimerRateHz::F16384,
-                    _ => panic!("Unknown timer frequency rate {}", val & 0b11),
+                    _ => unreachable!("Unknown timer frequency rate {}", val & 0b11),
                 };
                 self.timer.enable = val & (1 << 2) != 0;
             }
@@ -440,13 +443,18 @@ impl TimerRateHz {
 }
 
 impl Timer {
-    pub fn new(freq: TimerRateHz) -> Self {
+    pub fn new_disabled(freq: TimerRateHz) -> Self {
         Self {
             freq,
-            cycles: 0,
-            val: 0,
-            modulo: 0,
-            enable: false,
+            ..Default::default()
+        }
+    }
+
+    pub fn new_enabled(freq: TimerRateHz) -> Self {
+        Self {
+            enable: true,
+            freq,
+            ..Default::default()
         }
     }
 
@@ -460,19 +468,16 @@ impl Timer {
 
         self.cycles += cpu_cycles;
 
-        let overflow = if self.cycles >= self.freq.per_cpu_cycle() {
-            let (new_val, overflow) = self.val.overflowing_add(1);
+        let mut overflow = false;
+
+        while self.cycles >= self.freq.per_cpu_cycle() {
+            let (new_val, overflow_cur) = self.val.overflowing_add(1);
+
+            overflow |= overflow_cur;
 
             self.cycles -= self.freq.per_cpu_cycle();
-            self.val = new_val;
 
-            overflow
-        } else {
-            false
-        };
-
-        if overflow {
-            self.val = self.modulo;
+            self.val = if overflow_cur { self.modulo } else { new_val };
         }
 
         overflow
@@ -524,5 +529,35 @@ impl std::ops::BitAnd for InterruptFlags {
             serial: self.serial & rhs.serial,
             joypad: self.joypad & rhs.joypad,
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn multiple_overflows_in_one_timer_cycle() {
+        let mut timer = Timer::new_enabled(TimerRateHz::F262144);
+        timer.step(36);
+
+        assert_eq!(timer.val, 2);
+        assert_eq!(timer.cycles, 4);
+    }
+
+    #[test]
+    fn timer_overflow() {
+        let freq = TimerRateHz::F262144;
+
+        let mut timer = Timer::new_enabled(freq);
+        assert!(timer.step(freq.per_cpu_cycle() * (u8::MAX as u32 + 1)));
+        assert_eq!((timer.val, timer.cycles), (0, 0));
+
+        let mut timer = Timer::new_enabled(freq);
+        assert!(!timer.step(freq.per_cpu_cycle() * (u8::MAX as u32) + freq.per_cpu_cycle() - 1));
+        assert_eq!(
+            (timer.val, timer.cycles),
+            (u8::MAX, freq.per_cpu_cycle() - 1)
+        );
     }
 }

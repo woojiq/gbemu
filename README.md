@@ -2,7 +2,9 @@
 
 ## List of passed tests
 
-* blargg/cpu_instrs/*
+* blargg:
+  * cpu_instrs
+  * instr_timing
 
 ## Resources
 
