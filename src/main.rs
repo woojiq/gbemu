@@ -11,6 +11,8 @@ type GuiFrame = [u32; SCREEN_HEIGHT * SCREEN_WIDTH * 3];
 enum GuiEvent {
     KeyUp(JoypadKey),
     KeyDown(JoypadKey),
+    // Debug keys:
+    ToggleCpuPause,
 }
 
 pub fn minifb_key_to_joypad(key: minifb::Key) -> Option<JoypadKey> {
@@ -61,6 +63,10 @@ fn main() {
         .unwrap();
 
     while window.is_open() && !window.is_key_down(Key::Escape) {
+        if window.is_key_pressed(Key::P, minifb::KeyRepeat::No) {
+            let _ = key_events.0.send(GuiEvent::ToggleCpuPause);
+        }
+
         for key in window.get_keys_pressed(minifb::KeyRepeat::No) {
             if let Some(ev) = minifb_key_to_joypad(key) {
                 // No unwrap because the CPU may already be stopped (channels are closed).
@@ -96,12 +102,15 @@ fn run(mut cpu: CPU, gui_frame: SyncSender<GuiFrame>, key_events: Receiver<GuiEv
     let mut gui_buf = [0; SCREEN_HEIGHT * SCREEN_WIDTH * 3];
 
     let mut ticks = 0;
+    let mut cpu_pause = false;
 
     'main: loop {
-        while ticks < gbemu::TICKS_PER_FRAME {
-            ticks += cpu.cycle();
+        if !cpu_pause {
+            while ticks < gbemu::TICKS_PER_FRAME {
+                ticks += cpu.cycle();
+            }
+            ticks -= gbemu::TICKS_PER_FRAME;
         }
-        ticks -= gbemu::TICKS_PER_FRAME;
 
         gpu_buf_to_gui_buf(&cpu.gpu().buffer, &mut gui_buf);
 
@@ -114,6 +123,7 @@ fn run(mut cpu: CPU, gui_frame: SyncSender<GuiFrame>, key_events: Receiver<GuiEv
                 Ok(ev) => match ev {
                     GuiEvent::KeyUp(joypad_key) => cpu.key_up(joypad_key),
                     GuiEvent::KeyDown(joypad_key) => cpu.key_down(joypad_key),
+                    GuiEvent::ToggleCpuPause => cpu_pause = !cpu_pause,
                 },
                 Err(mpsc::TryRecvError::Empty) => break,
                 Err(mpsc::TryRecvError::Disconnected) => break 'main,
