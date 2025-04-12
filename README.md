@@ -14,6 +14,7 @@
 * turtle-tests:
   * window_y_trigger
   * window_y_trigger_wx_offscreen
+* dmg-acid2
 
 ## Resources
 

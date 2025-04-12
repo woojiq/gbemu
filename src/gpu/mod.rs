@@ -2,7 +2,7 @@ mod lcd_registers;
 
 use crate::{
     bit,
-    memory_bus::{OAM_END, OAM_SIZE, OAM_START, VIDEO_RAM_SIZE, VIDEO_RAM_START},
+    memory_bus::{OAM_SIZE, OAM_START, VIDEO_RAM_SIZE, VIDEO_RAM_START},
     SCREEN_HEIGHT, SCREEN_WIDTH,
 };
 use lcd_registers::{LcdControl, LcdStatus};
@@ -34,8 +34,7 @@ pub struct GPU {
     pub obj0_colors: BackgroundColors,
     pub obj1_colors: BackgroundColors,
 
-    // TODO: Remove pub.
-    pub cycles: u32,
+    cycles: u32,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -70,22 +69,50 @@ pub struct GpuInterrupts {
     pub lcd: bool,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub struct Oam {
     pos: Coordinate<i16>,
     tile_idx: u8,
     attrs: OamAttributes,
+    oam_idx: usize,
 }
 
-#[derive(Copy, Clone)]
+impl Oam {
+    fn new(oam_idx: usize, oam_height: u16, val: [u8; 4]) -> Self {
+        Self {
+            pos: Coordinate::new(val[1] as i16 - 8, val[0] as i16 - 16),
+            // In 8×16 mode the least significant bit of the tile index is ignored.
+            tile_idx: val[2] & if oam_height == 16 { !1 } else { !0 },
+            attrs: OamAttributes::from(val[3]),
+            oam_idx,
+        }
+    }
+}
+
+impl std::cmp::PartialOrd for Oam {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl std::cmp::Ord for Oam {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        if self.pos.x != other.pos.x {
+            self.pos.x.cmp(&other.pos.x)
+        } else {
+            self.oam_idx.cmp(&other.oam_idx)
+        }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub struct OamAttributes {
-    // FIXME: prio is not used.
     /// Sprite to Background Priority: If this flag is set to 0 then sprite
     /// is always rendered above the background and the window. However if it
     /// is set to 1 then the sprite is hidden behind the background and window
     /// unless the colour of the background or window is white, then it is still
     /// rendered on top.
-    prio: bool,
+    bg_prio: bool,
     y_flip: bool,
     x_flip: bool,
     /// If the palette property is 1 then OBP1 is used, otherwise OBP0 is used.
@@ -132,11 +159,11 @@ impl GPU {
         let mut inter = GpuInterrupts::default();
         if !self.lcd_control.lcd_enable && new.lcd_enable {
             self.switch_to_mode(PpuMode::OAMScan, &mut inter);
-            // TODO: Why 4?
+            // TODO: Why 4? Maybe this:
+            // https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#fetch-and-stuff
             self.cycles = 4;
         } else if self.lcd_control.lcd_enable && !new.lcd_enable {
             self.cycles = 0;
-            // TODO: https://gbdev.io/pandocs/Scrolling.html?highlight=wy%20trigg#window
             if self.lcd_status.set_line(0) {
                 inter.lcd = true;
             }
@@ -256,13 +283,11 @@ impl GPU {
     }
 
     fn draw_line(&mut self) {
-        if self.lcd_control.bg_and_window_display {
-            self.draw_tiles();
-        }
+        self.draw_tiles();
 
-        // if self.lcd_control.obj_enable {
-        //     self.draw_sprites();
-        // }
+        let bg_state = self.buffer;
+
+        self.draw_sprites(&bg_state);
     }
 
     fn draw_tiles(&mut self) {
@@ -275,8 +300,6 @@ impl GPU {
 
         for screen_x in 0..(SCREEN_WIDTH as u8) {
             let tile = self.get_tile_addr(screen_x);
-            assert!(tile.x / 8 <= 31);
-            assert!(tile.y / 8 <= 31);
             let bg_mem = self.get_bg_mem(screen_x);
 
             let tile_data = if self.lcd_control.bg_and_window_tile_data_area {
@@ -287,7 +310,6 @@ impl GPU {
 
             let tile_map_idx = (tile.y as u16 / 8) * 32 + tile.x as u16 / 8;
 
-            // TODO: Tests for this.
             let tile_addr = {
                 let addr = bg_mem + tile_map_idx;
                 // https://gbdev.io/pandocs/Tile_Data.html#vram-tile-data
@@ -307,9 +329,9 @@ impl GPU {
                 self.vram[(tile_addr + line + 1 - VIDEO_RAM_START) as usize],
             ];
 
-            let pixel = 7 - screen_x % 8;
+            let pixel = 7 - tile.x % 8;
             let color = {
-                let color_raw = (((data[0] >> pixel) & 1) << 1) | ((data[1] >> pixel) & 1);
+                let color_raw = (((data[1] >> pixel) & 1) << 1) | ((data[0] >> pixel) & 1);
                 self.bg_colors.get()[color_raw as usize].rgb()
             };
 
@@ -321,21 +343,28 @@ impl GPU {
         }
     }
 
-    fn draw_sprites(&mut self) {
-        // TODO: The Game Boy PPU can display up to 40 movable objects (or sprites), each 8×8 or
+    fn draw_sprites(&mut self, bg_state: &[[[u8; 3]; SCREEN_HEIGHT]; SCREEN_WIDTH]) {
+        // The Game Boy PPU can display up to 40 movable objects (or sprites), each 8×8 or
         // 8×16 pixels. Because of a limitation of hardware, only 10 objects can be displayed per
         // scanline.
+        const MAX_OBJS_PER_SCANLINE: usize = 10;
+
         if !self.lcd_control.obj_enable {
             return;
         }
 
         let obj_height = if self.lcd_control.obj_size { 16u16 } else { 8 };
+        let mut objs_to_draw = Vec::with_capacity(40);
 
-        for sprite_attr_addr in (0xFE00 - OAM_START..=(0xFE9F - OAM_END)).step_by(4) {
+        for sprite_attr_addr in ((0xFE00 - OAM_START)..=(0xFE9F - OAM_START)).step_by(4) {
+            if objs_to_draw.len() == MAX_OBJS_PER_SCANLINE {
+                break;
+            }
+
             let mem: [u8; 4] = self.oam[sprite_attr_addr as usize..(sprite_attr_addr + 4) as usize]
                 .try_into()
                 .unwrap();
-            let obj = Oam::from(mem);
+            let obj = Oam::new(sprite_attr_addr as usize / 4, obj_height, mem);
 
             if !(obj.pos.y <= self.lcd_status.line() as i16
                 && (self.lcd_status.line() as i16) < obj.pos.y + obj_height as i16)
@@ -343,10 +372,17 @@ impl GPU {
                 continue;
             }
 
-            let mut line = (self.lcd_status.line() as i16 - obj.pos.y) as u16;
-            if obj.attrs.y_flip {
-                line = obj_height - line;
-            }
+            objs_to_draw.push(obj);
+        }
+        objs_to_draw.sort_unstable();
+        objs_to_draw.reverse();
+
+        for obj in objs_to_draw {
+            let line = if obj.attrs.y_flip {
+                obj_height - 1 - (self.lcd_status.line() as i16 - obj.pos.y) as u16
+            } else {
+                (self.lcd_status.line() as i16 - obj.pos.y) as u16
+            };
 
             let addr = 0x8000 + obj.tile_idx as u16 * 16 + line * 2 - VIDEO_RAM_START;
 
@@ -358,14 +394,14 @@ impl GPU {
                 }
 
                 let color_bit = if obj.attrs.x_flip {
-                    7 - pixel_x
-                } else {
                     pixel_x
+                } else {
+                    7 - pixel_x
                 };
 
                 let color = {
                     let color_raw =
-                        (((data[0] >> color_bit) & 1) << 1) | ((data[1] >> color_bit) & 1);
+                        (((data[1] >> color_bit) & 1) << 1) | ((data[0] >> color_bit) & 1);
                     // Note that while 4 colors are stored per OBJ palette, color #0
                     // is never used, as it’s always transparent.
                     if color_raw == 0 {
@@ -379,6 +415,13 @@ impl GPU {
                 };
 
                 let buffer_x = pixel_x + obj.pos.x;
+
+                if obj.attrs.bg_prio
+                    && bg_state[buffer_x as usize][self.lcd_status.line() as usize][0]
+                        != Color::White.rgb()
+                {
+                    continue;
+                }
 
                 self.buffer[buffer_x as usize][self.lcd_status.line() as usize] =
                     [color, color, color];
@@ -490,20 +533,10 @@ impl From<u8> for Color {
     }
 }
 
-impl From<[u8; 4]> for Oam {
-    fn from(val: [u8; 4]) -> Self {
-        Self {
-            pos: Coordinate::new(val[1] as i16 - 8, val[0] as i16 - 16),
-            tile_idx: val[2],
-            attrs: OamAttributes::from(val[3]),
-        }
-    }
-}
-
 impl From<u8> for OamAttributes {
     fn from(val: u8) -> Self {
         Self {
-            prio: bit!(val, 7),
+            bg_prio: bit!(val, 7),
             y_flip: bit!(val, 6),
             x_flip: bit!(val, 5),
             dmg_palette: bit!(val, 4),

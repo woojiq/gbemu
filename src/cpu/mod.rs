@@ -76,7 +76,7 @@ impl CPU {
         // log::trace!("Parsed instruction {instruction:?}.");
 
         let (new_pc, cycles) = if self.is_halted {
-            (self.pc, 1)
+            (self.pc, 4)
         } else {
             self.execute(instruction)
         };
