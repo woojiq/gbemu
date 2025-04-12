@@ -28,9 +28,7 @@
               pkg-config
             ];
             buildInputs = with pkgs; [
-              libxkbcommon.dev
               alsa-lib.dev
-              udev.dev
             ];
 
             LD_LIBRARY_PATH = libPath;
@@ -39,6 +37,7 @@
               rust-analyzer
               rust-bin.stable."1.84.0".default
 
+              # rgbds
               hexyl
             ];
           };

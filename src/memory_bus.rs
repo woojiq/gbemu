@@ -28,6 +28,7 @@ pub const WORKING_RAM_SIZE: usize = (WORKING_RAM_END - WORKING_RAM_START + 1) as
 
 pub const ECHO_RAM_START: u16 = 0xE000;
 pub const ECHO_RAM_END: u16 = 0xFDFF;
+#[allow(dead_code)]
 pub const ECHO_RAM_SIZE: usize = (ECHO_RAM_END - ECHO_RAM_START + 1) as usize;
 
 // Object attribute memory (OAM).
@@ -37,10 +38,12 @@ pub const OAM_SIZE: usize = (OAM_END - OAM_START + 1) as usize;
 
 pub const UNUSED_START: u16 = 0xFEA0;
 pub const UNUSED_END: u16 = 0xFEFF;
+#[allow(dead_code)]
 pub const UNUSED_SIZE: usize = (UNUSED_END - UNUSED_START + 1) as usize;
 
 pub const IO_REGISTERS_START: u16 = 0xFF00;
 pub const IO_REGISTERS_END: u16 = 0xFF7F;
+#[allow(dead_code)]
 pub const IO_REGISTERS_SIZE: usize = (IO_REGISTERS_END - IO_REGISTERS_START + 1) as usize;
 
 pub const HIGH_RAM_AREA_START: u16 = 0xFF80;

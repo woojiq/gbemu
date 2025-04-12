@@ -34,8 +34,6 @@ fn main() {
 
     env_logger::try_init().unwrap();
 
-    // TODO: Support rom banks.
-    // TODO: Support saving gb buffer to png file and compare them with expected in tests.
     let content = read_bytes_from_file(&args.rom_path);
     info!("Read ROM with size 0x{:X}.", content.len());
 

@@ -22,6 +22,14 @@ pub struct GPU {
     /// The X Position -7.
     pub window: Coordinate<u8>,
 
+    // https://gbdev.io/pandocs/Scrolling.html#window:
+    /// Whether at some point in this frame the value of WY was equal to LY (checked at the start of
+    /// Mode 2 only)
+    window_y_trigger: bool,
+    /// The Y position is selected by an internal counter, which is reset to 0 during VBlank and
+    /// only incremented when the Window starts being rendered on a given scanline.
+    window_current_y: u8,
+
     pub bg_colors: BackgroundColors,
     pub obj0_colors: BackgroundColors,
     pub obj1_colors: BackgroundColors,
@@ -38,7 +46,7 @@ pub enum PpuMode {
     DrawingPixels,
 }
 
-#[derive(Copy, Clone, Default, Debug)]
+#[derive(Copy, Clone, Default, Debug, PartialEq, Eq)]
 pub struct Coordinate<T> {
     pub x: T,
     pub y: T,
@@ -96,6 +104,9 @@ impl GPU {
             viewport: Coordinate::default(),
             window: Coordinate::default(),
 
+            window_current_y: 0,
+            window_y_trigger: false,
+
             bg_colors: BackgroundColors::new(),
             obj0_colors: BackgroundColors::new(),
             obj1_colors: BackgroundColors::new(),
@@ -125,6 +136,7 @@ impl GPU {
             self.cycles = 4;
         } else if self.lcd_control.lcd_enable && !new.lcd_enable {
             self.cycles = 0;
+            // TODO: https://gbdev.io/pandocs/Scrolling.html?highlight=wy%20trigg#window
             if self.lcd_status.set_line(0) {
                 inter.lcd = true;
             }
@@ -222,6 +234,10 @@ impl GPU {
             }
             PpuMode::VBlank => {
                 inter.vblank = true;
+
+                self.window_current_y = 0;
+                self.window_y_trigger = false;
+
                 if self.lcd_status.vblank_interrupt {
                     inter.lcd = true;
                 }
@@ -232,7 +248,9 @@ impl GPU {
                 }
             }
             PpuMode::DrawingPixels => {
-                // TODO
+                if self.lcd_control.window_enable && self.lcd_status.line() == self.window.y {
+                    self.window_y_trigger = true;
+                }
             }
         }
     }
@@ -251,44 +269,15 @@ impl GPU {
         // background is 256x256. Each tile is 8x8 pixels x2 (for color) = 16 byte.
         // background is 32x32 tiles. Each tile 16 bytes.
 
-        let use_window = self.lcd_control.window_enable && self.window.y <= self.lcd_status.line();
-
         if !self.lcd_control.bg_and_window_display {
             return;
         }
 
         for screen_x in 0..(SCREEN_WIDTH as u8) {
-            let tile = {
-                let x = self.viewport.x + screen_x;
-                let tile_x = if use_window && self.window.x <= x + 7 {
-                    x + 7 - self.window.x
-                } else {
-                    x
-                };
-
-                let y = self.viewport.y.wrapping_add(self.lcd_status.line());
-                let tile_y = if use_window && self.window.y <= y {
-                    y - self.window.y
-                } else {
-                    y
-                };
-
-                Coordinate::new(tile_x, tile_y)
-            };
-
-            let bg_mem = if use_window {
-                if self.lcd_control.window_tile_map_area {
-                    0x9C00u16
-                } else {
-                    0x9800
-                }
-            } else {
-                if self.lcd_control.bg_tile_map_area {
-                    0x9C00
-                } else {
-                    0x9800
-                }
-            };
+            let tile = self.get_tile_addr(screen_x);
+            assert!(tile.x / 8 <= 31);
+            assert!(tile.y / 8 <= 31);
+            let bg_mem = self.get_bg_mem(screen_x);
 
             let tile_data = if self.lcd_control.bg_and_window_tile_data_area {
                 0x8000u16
@@ -325,6 +314,10 @@ impl GPU {
             };
 
             self.buffer[screen_x as usize][self.lcd_status.line() as usize] = [color, color, color];
+        }
+
+        if self.is_window_visible(SCREEN_WIDTH as u8 - 1) {
+            self.window_current_y += 1;
         }
     }
 
@@ -389,6 +382,37 @@ impl GPU {
 
                 self.buffer[buffer_x as usize][self.lcd_status.line() as usize] =
                     [color, color, color];
+            }
+        }
+    }
+
+    fn is_window_visible(&self, screen_x: u8) -> bool {
+        self.lcd_control.window_enable && self.window_y_trigger && self.window.x <= screen_x + 7
+    }
+
+    fn get_tile_addr(&mut self, screen_x: u8) -> Coordinate<u8> {
+        if self.is_window_visible(screen_x) {
+            Coordinate::new(screen_x + 7 - self.window.x, self.window_current_y)
+        } else {
+            Coordinate::new(
+                self.viewport.x.wrapping_add(screen_x),
+                self.viewport.y.wrapping_add(self.lcd_status.line()),
+            )
+        }
+    }
+
+    fn get_bg_mem(&self, screen_x: u8) -> u16 {
+        if self.is_window_visible(screen_x) {
+            if self.lcd_control.window_tile_map_area {
+                0x9C00
+            } else {
+                0x9800
+            }
+        } else {
+            if self.lcd_control.bg_tile_map_area {
+                0x9C00
+            } else {
+                0x9800
             }
         }
     }
@@ -484,5 +508,21 @@ impl From<u8> for OamAttributes {
             x_flip: bit!(val, 5),
             dmg_palette: bit!(val, 4),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn viewport_coordinates_are_wrapped() {
+        let mut gpu = GPU::new();
+
+        gpu.viewport = Coordinate::new(200, 200);
+        assert_eq!(gpu.get_tile_addr(100), Coordinate::new(44, 200));
+
+        let _ = gpu.lcd_status.set_line(100);
+        assert_eq!(gpu.get_tile_addr(100), Coordinate::new(44, 44));
     }
 }
