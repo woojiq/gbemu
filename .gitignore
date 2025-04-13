@@ -6,6 +6,7 @@ result
 
 .helix/
 
+*.gb
 
 # Added by cargo
 

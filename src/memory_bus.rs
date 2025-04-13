@@ -4,6 +4,7 @@ use crate::{
     bit,
     gpu::GPU,
     joypad::{Joypad, JoypadKey},
+    mbc::MBC,
 };
 
 pub const ROM_BANK_0_START: u16 = 0x0000;
@@ -53,9 +54,7 @@ pub const HIGH_RAM_AREA_SIZE: usize = (HIGH_RAM_AREA_END - HIGH_RAM_AREA_START +
 pub const INTERRUPT_ENABLED_REGISTER: u16 = 0xFFFF;
 
 pub struct MemoryBus {
-    rom_bank_0: [u8; ROM_BANK_0_SIZE],
-    rom_bank_n: [u8; ROM_BANK_N_SIZE],
-    external_ram: [u8; EXTERNAL_RAM_SIZE],
+    mbc: Box<dyn MBC>,
     /// Working RAM.
     wram: [u8; WORKING_RAM_SIZE],
 
@@ -104,11 +103,9 @@ pub struct InterruptFlags {
 }
 
 impl MemoryBus {
-    pub fn new(game_rom: &[u8]) -> Self {
+    pub fn new(game_rom: Vec<u8>) -> Self {
         let mut bus = Self {
-            rom_bank_0: [0; ROM_BANK_0_SIZE],
-            rom_bank_n: [0; ROM_BANK_N_SIZE],
-            external_ram: [0; EXTERNAL_RAM_SIZE],
+            mbc: crate::mbc::init(game_rom),
             wram: [0; WORKING_RAM_SIZE],
 
             gpu: GPU::new(),
@@ -123,23 +120,6 @@ impl MemoryBus {
         };
 
         bus.divider.enable = true;
-
-        use std::cmp::min;
-
-        let bank0_len = min(bus.rom_bank_0.len(), game_rom.len());
-        bus.rom_bank_0[..bank0_len].copy_from_slice(&game_rom[..bank0_len]);
-
-        if game_rom.len() > ROM_BANK_0_SIZE {
-            assert!(
-                game_rom.len() <= ROM_BANK_N_END as usize,
-                "Max supported size is {}, got {}.",
-                ROM_BANK_N_END,
-                game_rom.len()
-            );
-
-            let bankn_len = game_rom.len() - bank0_len;
-            bus.rom_bank_n[..bankn_len].copy_from_slice(&game_rom[bank0_len..]);
-        }
 
         bus.set_init_values();
 
@@ -247,16 +227,9 @@ impl MemoryBus {
 
     pub fn read_byte(&self, addr: u16) -> u8 {
         match addr {
-            ROM_BANK_0_START..=ROM_BANK_0_END => {
-                self.rom_bank_0[(addr - ROM_BANK_0_START) as usize]
-            }
-            ROM_BANK_N_START..=ROM_BANK_N_END => {
-                self.rom_bank_n[(addr - ROM_BANK_N_START) as usize]
-            }
+            ROM_BANK_0_START..=ROM_BANK_N_END => self.mbc.read_rom(addr),
             VIDEO_RAM_START..=VIDEO_RAM_END => self.gpu.vram[(addr - VIDEO_RAM_START) as usize],
-            EXTERNAL_RAM_START..=EXTERNAL_RAM_END => {
-                self.external_ram[(addr - EXTERNAL_RAM_START) as usize]
-            }
+            EXTERNAL_RAM_START..=EXTERNAL_RAM_END => self.mbc.read_ram(addr),
             WORKING_RAM_START..=WORKING_RAM_END => self.wram[(addr - WORKING_RAM_START) as usize],
             ECHO_RAM_START..=ECHO_RAM_END => self.wram[(addr - ECHO_RAM_START) as usize],
             OAM_START..=OAM_END => self.gpu.oam[(addr - OAM_START) as usize],
@@ -276,23 +249,11 @@ impl MemoryBus {
 
     pub fn write_byte(&mut self, addr: u16, val: u8) {
         match addr {
-            ROM_BANK_0_START..=ROM_BANK_0_END => {
-                // TODO: Implement reading/writing this to select Bank.
-                // self.rom_bank_0[(addr - ROM_BANK_0_START) as usize] = val
-            }
-            ROM_BANK_N_START..=ROM_BANK_N_END => {
-                panic!(
-                    "Changing ROM Bank memory is forbidden: addr = 0x{:X}, val = 0x{:X}",
-                    addr, val
-                );
-                // self.rom_bank_n[(addr - ROM_BANK_N_START) as usize] = val
-            }
+            ROM_BANK_0_START..=ROM_BANK_N_END => self.mbc.write_rom(addr, val),
             VIDEO_RAM_START..=VIDEO_RAM_END => {
                 self.gpu.vram[(addr - VIDEO_RAM_START) as usize] = val
             }
-            EXTERNAL_RAM_START..=EXTERNAL_RAM_END => {
-                self.external_ram[(addr - EXTERNAL_RAM_START) as usize] = val
-            }
+            EXTERNAL_RAM_START..=EXTERNAL_RAM_END => self.mbc.write_ram(addr, val),
             WORKING_RAM_START..=WORKING_RAM_END => {
                 self.wram[(addr - WORKING_RAM_START) as usize] = val
             }

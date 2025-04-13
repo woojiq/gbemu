@@ -33,7 +33,7 @@ fn main() {
     let content = read_bytes_from_file(&args.rom_path);
     eprintln!("Read ROM with size 0x{:X}.", content.len());
 
-    let cpu = CPU::new(&content);
+    let cpu = CPU::new(content);
     let mut window = Window::new(
         "DMG-01",
         SCREEN_WIDTH,

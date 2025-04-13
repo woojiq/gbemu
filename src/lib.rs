@@ -20,6 +20,7 @@ pub mod args;
 pub mod cpu;
 pub(crate) mod gpu;
 pub(crate) mod joypad;
+pub(crate) mod mbc;
 pub(crate) mod memory_bus;
 
 #[macro_export]

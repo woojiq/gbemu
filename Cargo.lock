@@ -288,7 +288,7 @@ dependencies = [
 [[package]]
 name = "minifb"
 version = "0.28.0"
-source = "git+https://github.com/woojiq/rust_minifb.git?branch=fix_released_keys_detection_on_wayland#69f930f8acfaf8767c6f28df868fc213855f5842"
+source = "git+https://github.com/emoon/rust_minifb?rev=8c38fb79096d936fdc92993a865b333a58bd305e#8c38fb79096d936fdc92993a865b333a58bd305e"
 dependencies = [
  "cc",
  "console_error_panic_hook",

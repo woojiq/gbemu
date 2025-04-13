@@ -4,7 +4,9 @@
 
 * Support different Memory Bank Controllers.
 * Automate ROM tests.
-* Builtin debugger (in time, lol, after spending hours for eprintln)
+* Builtin debugger (in time, lol, after spending hours for eprintln).
+* Write one ROM test myself.
+* Add a LICENSE (and note that the license only applies to my code, not game/test ROMs).
 
 ## List of passed tests
 

@@ -5,10 +5,7 @@ edition = "2021"
 
 [dependencies]
 lexopt = "0.3.0"
-minifb = "0.28.0"
-
-[patch.crates-io]
-minifb = { git = "https://github.com/woojiq/rust_minifb.git", branch = "fix_released_keys_detection_on_wayland" }
+minifb = { git = "https://github.com/emoon/rust_minifb", rev = "8c38fb79096d936fdc92993a865b333a58bd305e" }
 
 [profile.dev]
 overflow-checks = true

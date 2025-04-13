@@ -24,7 +24,7 @@ pub struct CPU {
 impl CPU {
     const INSTRUCTION_PREFIX: u8 = 0xCB;
 
-    pub fn new(game_rom: &[u8]) -> Self {
+    pub fn new(game_rom: Vec<u8>) -> Self {
         Self {
             registers: CpuRegisters::new(),
             memory: MemoryBus::new(game_rom),
@@ -1176,7 +1176,7 @@ mod test {
 
     #[test]
     fn instruction_swap_bits() {
-        let mut cpu = CPU::new(&[]);
+        let mut cpu = CPU::new(vec![0; 0x200]);
         let mut flag = registers::FlagsRegister {
             zero: false,
             subtract: false,
