@@ -99,6 +99,8 @@ pub struct InterruptFlags {
     timer: bool,
     serial: bool,
     joypad: bool,
+    /// 3 unused bits that we need save and include when converting to u8.
+    unused_high: u8,
 }
 
 impl MemoryBus {
@@ -209,7 +211,6 @@ impl MemoryBus {
     }
 
     pub fn vbank_interrupt(&self) -> bool {
-        // dbg!(self.interrupt_enable.vblank, self.interrupt_flag.vblank);
         self.interrupt_enable.vblank && self.interrupt_flag.vblank
     }
     pub fn reset_vbank_interrupt(&mut self) {
@@ -274,10 +275,10 @@ impl MemoryBus {
     }
 
     pub fn write_byte(&mut self, addr: u16, val: u8) {
-        // eprintln!("0x{addr:X} = {val}");
         match addr {
             ROM_BANK_0_START..=ROM_BANK_0_END => {
-                self.rom_bank_0[(addr - ROM_BANK_0_START) as usize] = val
+                // TODO: Implement reading/writing this to select Bank.
+                // self.rom_bank_0[(addr - ROM_BANK_0_START) as usize] = val
             }
             ROM_BANK_N_START..=ROM_BANK_N_END => {
                 panic!(
@@ -320,30 +321,32 @@ impl MemoryBus {
         match addr {
             0xFF00 => u8::from(self.joypad),
             0xFF01..=0xFF02 => {
+                0xFF
                 // TODO: Serial transfer read.
-                0
             }
             0xFF04 => self.divider.val,
             0xFF05 => self.timer.val,
             0xFF06 => self.timer.modulo,
             0xFF07 => {
-                (match self.timer.freq {
-                    TimerRateHz::F4096 => 0,
-                    TimerRateHz::F262144 => 1,
-                    TimerRateHz::F65536 => 2,
-                    TimerRateHz::F16384 => 3,
-                }) | ((self.timer.enable as u8) << 2)
+                0b11111000
+                    | (match self.timer.freq {
+                        TimerRateHz::F4096 => 0,
+                        TimerRateHz::F262144 => 1,
+                        TimerRateHz::F65536 => 2,
+                        TimerRateHz::F16384 => 3,
+                    })
+                    | ((self.timer.enable as u8) << 2)
             }
-            0xFF0F => u8::from(self.interrupt_flag),
+            0xFF0F => 0b11100000 | u8::from(self.interrupt_flag),
             0xFF10..=0xFF26 => {
-                0
+                0xFF
                 // unimplemented!("Reading from Audio registers is not supported yet."),
             }
             0xFF30..=0xFF3F => {
                 unimplemented!("Reading from Wave pattern registers is not supported yet.")
             }
             0xFF40 => u8::from(self.gpu.lcd_control),
-            0xFF41 => self.gpu.lcd_status.get_status_byte(),
+            0xFF41 => (1 << 7) | self.gpu.lcd_status.get_status_byte(),
             0xFF42 => self.gpu.viewport.y,
             0xFF43 => self.gpu.viewport.x,
             0xFF44 => self.gpu.lcd_status.ly(),
@@ -353,7 +356,7 @@ impl MemoryBus {
             0xFF49 => u8::from(self.gpu.obj1_colors),
             0xFF4A => self.gpu.window.y,
             0xFF4B => self.gpu.window.x,
-            _ => panic!("Reading from addr 0x{addr:X} is forbidden."),
+            _ => 0xFF,
         }
     }
 
@@ -393,7 +396,10 @@ impl MemoryBus {
             0xFF41 => self.gpu.lcd_status.write_byte_to_status(val),
             0xFF42 => self.gpu.viewport.y = val,
             0xFF43 => self.gpu.viewport.x = val,
-            0xFF44 => panic!("LCD Y coordinate is read-only."),
+            0xFF44 => {
+                // LCD Y coordinate is read-only. But there are buggy ROMs that try to write to this
+                // register, so just ignore it.
+            }
             0xFF45 => {
                 if self.gpu.lcd_status.set_lyc(val) {
                     self.interrupt_flag.lcd = true;
@@ -414,7 +420,7 @@ impl MemoryBus {
             0xFF7F..=0xFF7F => {
                 // Writing here does nothing.
             }
-            _ => panic!("Cannot write to memory location 0x{addr:X}"),
+            _ => {}
         }
     }
 
@@ -494,13 +500,15 @@ impl InterruptFlags {
             timer: false,
             serial: false,
             joypad: false,
+            unused_high: 0,
         }
     }
 }
 
 impl From<InterruptFlags> for u8 {
     fn from(v: InterruptFlags) -> Self {
-        ((v.joypad as u8) << 4)
+        v.unused_high
+            | ((v.joypad as u8) << 4)
             | ((v.serial as u8) << 3)
             | ((v.timer as u8) << 2)
             | ((v.lcd as u8) << 1)
@@ -516,6 +524,7 @@ impl From<u8> for InterruptFlags {
             timer: bit!(v, 2),
             serial: bit!(v, 3),
             joypad: bit!(v, 4),
+            unused_high: v & 0b11100000,
         }
     }
 }
@@ -530,6 +539,7 @@ impl std::ops::BitAnd for InterruptFlags {
             timer: self.timer & rhs.timer,
             serial: self.serial & rhs.serial,
             joypad: self.joypad & rhs.joypad,
+            unused_high: self.unused_high & rhs.unused_high,
         }
     }
 }

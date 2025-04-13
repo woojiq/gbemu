@@ -190,7 +190,6 @@ impl GPU {
 
         let mut inter = GpuInterrupts::default();
 
-        // dbg!(self.lcd_control.lcd_enable);
         if !self.lcd_control.lcd_enable {
             return inter;
         }
@@ -285,6 +284,7 @@ impl GPU {
     fn draw_line(&mut self) {
         self.draw_tiles();
 
+        // TODO: Profile this shit: copying w*h*3 before drawing every line is too much.
         let bg_state = self.buffer;
 
         self.draw_sprites(&bg_state);

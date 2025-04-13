@@ -78,7 +78,7 @@ impl FlagsRegister {
     const CARRY_FLAG_POSITION: u8 = 4;
 
     pub fn new() -> Self {
-        FlagsRegister {
+        Self {
             zero: true,
             subtract: false,
             half_carry: true,

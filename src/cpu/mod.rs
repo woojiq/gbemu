@@ -73,8 +73,6 @@ impl CPU {
 
         let instruction = self.get_current_instruction();
 
-        // log::trace!("Parsed instruction {instruction:?}.");
-
         let (new_pc, cycles) = if self.is_halted {
             (self.pc, 4)
         } else {
@@ -119,7 +117,6 @@ impl CPU {
     }
 
     fn process_interrupts(&mut self) -> u32 {
-        // dbg!(self.interrupts_enabled);
         if self.memory.pending_interrupt() {
             self.is_halted = false;
         }
@@ -153,7 +150,6 @@ impl CPU {
 
     fn interrupt(&mut self, addr: u16) {
         self.interrupts_enabled = false;
-        // dbg!(addr);
         self.push_stack(self.pc);
         self.pc = addr;
     }
@@ -663,7 +659,6 @@ impl CPU {
                         (self.pc.wrapping_add(1), 2)
                     }
                     instruction::IndirectTarget::HLD => {
-                        // dbg!(crate::hex!(self.registers.hl()));
                         self.memory
                             .write_byte(self.registers.hl(), self.registers.a);
                         self.registers.set_hl(self.registers.hl() - 1);
@@ -1181,8 +1176,6 @@ mod test {
 
     #[test]
     fn instruction_swap_bits() {
-        env_logger::try_init().unwrap();
-
         let mut cpu = CPU::new(&[]);
         let mut flag = registers::FlagsRegister {
             zero: false,

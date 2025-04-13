@@ -2,9 +2,9 @@
 
 ## TODO (most important)
 
-* Automate ROM tests.
 * Support different Memory Bank Controllers.
-* Fix crash in Tetris after entering a game.
+* Automate ROM tests.
+* Builtin debugger (in time, lol, after spending hours for eprintln)
 
 ## List of passed tests
 
@@ -15,6 +15,14 @@
   * window_y_trigger
   * window_y_trigger_wx_offscreen
 * dmg-acid2
+* mooneye-test-suite
+  * acceptance
+    * bits
+    * instr
+  * oam_dma
+    * basic
+  * manual-only
+    * sprite_priority
 
 ## Resources
 

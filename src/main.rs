@@ -1,7 +1,5 @@
 use std::sync::mpsc::{self, Receiver, SyncSender};
 
-use log::info;
-
 use gbemu::{args::parse_args, cpu::JoypadKey, cpu::CPU, SCREEN_HEIGHT, SCREEN_WIDTH};
 use minifb::{Key, Window};
 
@@ -32,10 +30,8 @@ pub fn minifb_key_to_joypad(key: minifb::Key) -> Option<JoypadKey> {
 fn main() {
     let args = parse_args().unwrap();
 
-    env_logger::try_init().unwrap();
-
     let content = read_bytes_from_file(&args.rom_path);
-    info!("Read ROM with size 0x{:X}.", content.len());
+    eprintln!("Read ROM with size 0x{:X}.", content.len());
 
     let cpu = CPU::new(&content);
     let mut window = Window::new(
