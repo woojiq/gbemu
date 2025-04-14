@@ -31,7 +31,6 @@ fn main() {
     let args = parse_args().unwrap();
 
     let content = read_bytes_from_file(&args.rom_path);
-    eprintln!("Read ROM with size 0x{:X}.", content.len());
 
     let cpu = CPU::new(content);
     let mut window = Window::new(

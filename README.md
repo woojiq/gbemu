@@ -25,6 +25,8 @@
     * basic
   * manual-only
     * sprite_priority
+  * emulator-only
+    * mbc1 (except multicart_rom_8Mb)
 
 ## Resources
 
@@ -47,3 +49,5 @@ Gameboy Emulation: http://www.codeslinger.co.uk/pages/projects/gameboy.html
 Guide with pictures: https://hacktix.github.io/GBEDG/ppu
 
 A collection of different test suites for your Game Boy emulator: https://github.com/c-sp/game-boy-test-roms/tree/8e1f6d7f3a1d8683f11fdf23008d1b1b26e51b52
+
+Game Boy: Complete Technical Reference: https://github.com/Gekkio/gb-ctr
