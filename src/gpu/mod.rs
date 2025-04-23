@@ -34,7 +34,7 @@ pub struct GPU {
     pub obj0_colors: BackgroundColors,
     pub obj1_colors: BackgroundColors,
 
-    cycles: u32,
+    cycles: u64,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -142,6 +142,27 @@ impl GPU {
         }
     }
 
+    pub fn to_rgb8(&self, buff: &mut [u8; SCREEN_HEIGHT * SCREEN_WIDTH * 3]) {
+        for row in 0..SCREEN_HEIGHT {
+            for col in 0..SCREEN_WIDTH {
+                let idx = (row * SCREEN_WIDTH + col) * 3;
+                buff[idx] = self.buffer[col][row][0];
+                buff[idx + 1] = self.buffer[col][row][1];
+                buff[idx + 2] = self.buffer[col][row][2];
+            }
+        }
+    }
+
+    pub fn to_rgb32(&self, buff: &mut [u32; SCREEN_HEIGHT * SCREEN_WIDTH]) {
+        for row in 0..SCREEN_HEIGHT {
+            for col in 0..SCREEN_WIDTH {
+                buff[row * SCREEN_WIDTH + col] = ((self.buffer[col][row][0] as u32) << 16)
+                    | ((self.buffer[col][row][0] as u32) << 8)
+                    | (self.buffer[col][row][0] as u32);
+            }
+        }
+    }
+
     pub fn set_lcd_control(&mut self, val: u8) -> GpuInterrupts {
         use crate::bit;
 
@@ -180,13 +201,13 @@ impl GPU {
         self.buffer.fill([[Color::White.rgb(); 3]; SCREEN_HEIGHT]);
     }
 
-    pub fn step(&mut self, mut cycles: u32) -> GpuInterrupts {
-        const SCANLINE_DOTS: u32 = 456;
+    pub fn step(&mut self, mut cycles: u64) -> GpuInterrupts {
+        const SCANLINE_DOTS: u64 = 456;
         const LAST_SCANLINE: u8 = 153;
         const LAST_VISIBLE_SCANLINE: u8 = 143;
 
-        const OAM_SCAN_DOTS: u32 = 80;
-        const DRAWING_PIXELS_DOTS: u32 = 172;
+        const OAM_SCAN_DOTS: u64 = 80;
+        const DRAWING_PIXELS_DOTS: u64 = 172;
 
         let mut inter = GpuInterrupts::default();
 
@@ -513,10 +534,10 @@ impl From<BackgroundColors> for u8 {
 impl Color {
     pub fn rgb(&self) -> u8 {
         match self {
-            Color::White => 255,
-            Color::LightGray => 211,
-            Color::DarkGray => 68,
-            Color::Black => 0,
+            Color::White => 0xFF,
+            Color::LightGray => 0xAA,
+            Color::DarkGray => 0x55,
+            Color::Black => 0x00,
         }
     }
 }

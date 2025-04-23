@@ -3,7 +3,7 @@ use std::sync::mpsc::{self, Receiver, SyncSender};
 use gbemu::{args::parse_args, cpu::JoypadKey, cpu::CPU, SCREEN_HEIGHT, SCREEN_WIDTH};
 use minifb::{Key, Window};
 
-type GuiFrame = [u32; SCREEN_HEIGHT * SCREEN_WIDTH * 3];
+type GuiFrame = [u32; SCREEN_HEIGHT * SCREEN_WIDTH];
 
 #[derive(Copy, Clone, Debug)]
 enum GuiEvent {
@@ -30,7 +30,7 @@ pub fn minifb_key_to_joypad(key: minifb::Key) -> Option<JoypadKey> {
 fn main() {
     let args = parse_args().unwrap();
 
-    let content = read_bytes_from_file(&args.rom_path);
+    let content = gbemu::read_rom(&args.rom_path).unwrap();
 
     let cpu = CPU::new(content);
     let mut window = Window::new(
@@ -91,9 +91,9 @@ fn main() {
 
 fn run(mut cpu: CPU, gui_frame: SyncSender<GuiFrame>, key_events: Receiver<GuiEvent>) {
     // Inspired by https://github.com/mvdnes/rboy/blob/1e46c6d5fc61140e8e1919dea9f799d9d4e41345/src/main.rs#L317
-    let limiter = spawn_limiter(gbemu::MILLIS_PER_FRAME as u64);
+    let limiter = spawn_limiter(gbemu::MILLIS_PER_FRAME);
 
-    let mut gui_buf = [0; SCREEN_HEIGHT * SCREEN_WIDTH * 3];
+    let mut gui_buf = [0u32; SCREEN_HEIGHT * SCREEN_WIDTH];
 
     let mut ticks = 0;
     let mut cpu_pause = false;
@@ -106,7 +106,7 @@ fn run(mut cpu: CPU, gui_frame: SyncSender<GuiFrame>, key_events: Receiver<GuiEv
             ticks -= gbemu::TICKS_PER_FRAME;
         }
 
-        gpu_buf_to_gui_buf(&cpu.gpu().buffer, &mut gui_buf);
+        cpu.gpu().to_rgb32(&mut gui_buf);
 
         if gui_frame.send(gui_buf).is_err() {
             break;
@@ -135,26 +135,4 @@ fn spawn_limiter(ms: u64) -> Receiver<()> {
         snd.send(()).unwrap();
     });
     rcv
-}
-
-fn gpu_buf_to_gui_buf(gpu: &[[[u8; 3]; SCREEN_HEIGHT]; SCREEN_WIDTH], gui: &mut [u32]) {
-    for row in 0..SCREEN_HEIGHT {
-        for col in 0..SCREEN_WIDTH {
-            gui[row * SCREEN_WIDTH + col] = ((gpu[col][row][0] as u32) << 16)
-                | ((gpu[col][row][0] as u32) << 8)
-                | (gpu[col][row][0] as u32);
-        }
-    }
-}
-
-fn read_bytes_from_file(path: &std::path::Path) -> Vec<u8> {
-    let mut f = std::fs::File::open(path).unwrap();
-    let mut content = vec![];
-
-    use std::io::Read;
-    f.read_to_end(&mut content).unwrap();
-
-    // Remove EOF.
-    content.resize(content.len() - 1, 0);
-    content
 }

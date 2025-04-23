@@ -83,7 +83,7 @@ pub enum TimerRateHz {
 #[derive(Copy, Clone, Default)]
 pub struct Timer {
     freq: TimerRateHz,
-    cycles: u32,
+    cycles: u64,
     pub val: u8,
     /// When TIMA overflows, it is reset to the value in this register and an
     /// interrupt is requested.
@@ -172,7 +172,7 @@ impl MemoryBus {
         }
     }
 
-    pub fn step(&mut self, cycles: u32) -> u32 {
+    pub fn step(&mut self, cycles: u64) -> u64 {
         self.divider.step(cycles);
 
         if self.timer.step(cycles) {
@@ -400,7 +400,7 @@ impl MemoryBus {
 }
 
 impl TimerRateHz {
-    pub const fn per_cpu_cycle(&self) -> u32 {
+    pub const fn per_cpu_cycle(&self) -> u64 {
         use crate::CPU_FREQ;
         match self {
             TimerRateHz::F4096 => CPU_FREQ / 4096,
@@ -430,7 +430,7 @@ impl Timer {
     /// # Returns
     ///
     /// Whether overflow occurs.
-    pub fn step(&mut self, cpu_cycles: u32) -> bool {
+    pub fn step(&mut self, cpu_cycles: u64) -> bool {
         if !self.enable {
             return false;
         }
@@ -523,11 +523,11 @@ mod test {
         let freq = TimerRateHz::F262144;
 
         let mut timer = Timer::new_enabled(freq);
-        assert!(timer.step(freq.per_cpu_cycle() * (u8::MAX as u32 + 1)));
+        assert!(timer.step(freq.per_cpu_cycle() * (u8::MAX as u64 + 1)));
         assert_eq!((timer.val, timer.cycles), (0, 0));
 
         let mut timer = Timer::new_enabled(freq);
-        assert!(!timer.step(freq.per_cpu_cycle() * (u8::MAX as u32) + freq.per_cpu_cycle() - 1));
+        assert!(!timer.step(freq.per_cpu_cycle() * (u8::MAX as u64) + freq.per_cpu_cycle() - 1));
         assert_eq!(
             (timer.val, timer.cycles),
             (u8::MAX, freq.per_cpu_cycle() - 1)

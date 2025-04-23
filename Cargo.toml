@@ -7,6 +7,9 @@ edition = "2021"
 lexopt = "0.3.0"
 minifb = { git = "https://github.com/emoon/rust_minifb", rev = "8c38fb79096d936fdc92993a865b333a58bd305e" }
 
+[dev-dependencies]
+image = "0.25.6"
+
 [profile.dev]
 overflow-checks = true
 

@@ -11,10 +11,10 @@ pub const SCREEN_HEIGHT: usize = 144;
 // TCycles - CPU
 // MCycles - Hardware
 
-pub const CPU_FREQ: u32 = 4194304;
-pub const GPU_FPS: u32 = 60;
-pub const MILLIS_PER_FRAME: u32 = 1000 / GPU_FPS;
-pub const TICKS_PER_FRAME: u32 = CPU_FREQ / 1000 * MILLIS_PER_FRAME;
+pub const CPU_FREQ: u64 = 4194304;
+pub const GPU_FPS: u64 = 60;
+pub const MILLIS_PER_FRAME: u64 = 1000 / GPU_FPS;
+pub const TICKS_PER_FRAME: u64 = CPU_FREQ / 1000 * MILLIS_PER_FRAME;
 
 pub mod args;
 pub mod cpu;
@@ -35,6 +35,18 @@ macro_rules! hex {
     ($val:expr) => {
         format!("0x{:X}", $val)
     };
+}
+
+pub fn read_rom(path: &std::path::Path) -> std::io::Result<Vec<u8>> {
+    let mut f = std::fs::File::open(path)?;
+    let mut content = vec![];
+
+    use std::io::Read;
+    f.read_to_end(&mut content)?;
+
+    // Remove EOF.
+    content.resize(content.len() - 1, 0);
+    Ok(content)
 }
 
 #[cfg(test)]

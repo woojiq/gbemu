@@ -1,4 +1,4 @@
-mod instruction;
+pub mod instruction;
 mod registers;
 
 pub use crate::joypad::JoypadKey;
@@ -37,7 +37,7 @@ impl CPU {
         }
     }
 
-    pub fn cycle(&mut self) -> u32 {
+    pub fn cycle(&mut self) -> u64 {
         // eprintln!(
         //     "PC 0x{:X} SP 0x{:X}, INS 0x{:X}, NX 0x{:X}: {} {} {} {} {} {} {}, LINE {}, {}",
         //     self.pc,
@@ -88,6 +88,14 @@ impl CPU {
         self.memory.step(cycles)
     }
 
+    pub fn pc(&self) -> u16 {
+        self.pc
+    }
+
+    pub fn registers(&self) -> &CpuRegisters {
+        &self.registers
+    }
+
     pub fn key_up(&mut self, key: JoypadKey) {
         self.memory.key_up(key);
     }
@@ -116,7 +124,7 @@ impl CPU {
         self.ei_timer = self.ei_timer.saturating_sub(1);
     }
 
-    fn process_interrupts(&mut self) -> u32 {
+    fn process_interrupts(&mut self) -> u64 {
         if self.memory.pending_interrupt() {
             self.is_halted = false;
         }
@@ -154,7 +162,7 @@ impl CPU {
         self.pc = addr;
     }
 
-    fn get_current_instruction(&self) -> Instruction {
+    pub fn get_current_instruction(&self) -> Instruction {
         let byte = self.read_current_byte();
         if byte == Self::INSTRUCTION_PREFIX {
             let byte = self.read_next_byte();
@@ -187,7 +195,7 @@ impl CPU {
         self.memory.read_byte(self.registers.hl())
     }
 
-    fn execute(&mut self, instruction: Instruction) -> (u16, u32) {
+    fn execute(&mut self, instruction: Instruction) -> (u16, u64) {
         macro_rules! arithmetic_instruction {
             ($target:ident; $func:ident) => {{
                 let _fake;
@@ -1104,7 +1112,7 @@ impl CPU {
     }
 
     #[must_use]
-    fn jump_relative(&mut self, addr: u16, jump: bool) -> (u16, u32) {
+    fn jump_relative(&mut self, addr: u16, jump: bool) -> (u16, u64) {
         if jump {
             (self.pc.wrapping_add(2).wrapping_add(addr), 3)
         } else {
@@ -1113,7 +1121,7 @@ impl CPU {
     }
 
     #[must_use]
-    fn jump_absolute(&mut self, addr: u16, jump: bool) -> (u16, u32) {
+    fn jump_absolute(&mut self, addr: u16, jump: bool) -> (u16, u64) {
         if jump {
             (addr, 4)
         } else {
@@ -1122,7 +1130,7 @@ impl CPU {
     }
 
     #[must_use]
-    fn call(&mut self, addr: u16, jump: bool) -> (u16, u32) {
+    fn call(&mut self, addr: u16, jump: bool) -> (u16, u64) {
         if jump {
             self.push_stack(self.pc.wrapping_add(3));
             (addr, 6)

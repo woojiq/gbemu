@@ -2,31 +2,16 @@
 
 ## TODO (most important)
 
-* Support different Memory Bank Controllers.
-* Automate ROM tests.
-* Builtin debugger (in time, lol, after spending hours for eprintln).
-* Write one ROM test myself.
 * Add a LICENSE (and note that the license only applies to my code, not game/test ROMs).
+* Sound.
+* Save game state.
+* MBC2, MBC3, MBC5 support.
+* Write one ROM test myself.
+* Builtin debugger (in time, lol, after spending hours for eprintln).
 
 ## List of passed tests
 
-* blargg:
-  * cpu_instrs
-  * instr_timing
-* turtle-tests:
-  * window_y_trigger
-  * window_y_trigger_wx_offscreen
-* dmg-acid2
-* mooneye-test-suite
-  * acceptance
-    * bits
-    * instr
-  * oam_dma
-    * basic
-  * manual-only
-    * sprite_priority
-  * emulator-only
-    * mbc1 (except multicart_rom_8Mb)
+See tests/test_roms.rs
 
 ## Resources
 
