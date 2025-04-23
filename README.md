@@ -2,7 +2,6 @@
 
 ## TODO (most important)
 
-* Add a LICENSE (and note that the license only applies to my code, not game/test ROMs).
 * Sound.
 * Save game state.
 * MBC2, MBC3, MBC5 support.
@@ -12,6 +11,12 @@
 ## List of passed tests
 
 See tests/test_roms.rs
+
+## License
+
+The software is licensed under the MIT License.
+
+Note: The MIT license does not apply to the prebuilt ROMs in this repository. They are covered by their own licenses.
 
 ## Resources
 
