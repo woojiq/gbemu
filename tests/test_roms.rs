@@ -4,7 +4,10 @@ use std::path::PathBuf;
 // https://github.com/c-sp/game-boy-test-roms/ to this directory.
 
 use gbemu::{
-    cpu::instruction::{Instruction, JumpTest, LoadByteSource, LoadByteTarget, LoadType},
+    cpu::{
+        instruction::{Instruction, JumpTest, LoadByteSource, LoadByteTarget, LoadType},
+        CPU,
+    },
     SCREEN_HEIGHT, SCREEN_WIDTH,
 };
 
@@ -14,7 +17,7 @@ fn test_rom_screen(rom_path: PathBuf, img_expected: PathBuf, timeout: u64) {
     let img = image::open(&img_expected).unwrap().to_rgb8();
     let rom = gbemu::read_rom(&rom_path).unwrap();
 
-    let mut cpu = gbemu::cpu::CPU::new(rom);
+    let mut cpu = CPU::new_without_sound(rom);
     let mut cycles = 0;
 
     while cycles < timeout {
@@ -62,7 +65,7 @@ macro_rules! test_by_screen {
 fn test_rom_fibonacci(rom_path: PathBuf, timeout: u64) {
     let rom = gbemu::read_rom(&rom_path).unwrap();
 
-    let mut cpu = gbemu::cpu::CPU::new(rom);
+    let mut cpu = CPU::new_without_sound(rom);
     let mut cycles = 0;
 
     while cycles < timeout {
@@ -109,6 +112,11 @@ mod blargg {
             path!("instr_timing/instr_timing.gb"),
             path!("instr_timing/instr_timing-dmg-cgb.png"),
             5_000_000
+        ),
+        dmg_sound(
+            path!("dmg_sound/dmg_sound.gb"),
+            path!("dmg_sound/dmg_sound-dmg.png"),
+            500_000_000
         ),
     );
 }

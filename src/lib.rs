@@ -16,17 +16,23 @@ pub const GPU_FPS: u64 = 60;
 pub const MILLIS_PER_FRAME: u64 = 1000 / GPU_FPS;
 pub const TICKS_PER_FRAME: u64 = CPU_FREQ / 1000 * MILLIS_PER_FRAME;
 
+pub const AUDIO_BUF_LEN: usize = 2000;
+pub const SAMPLE_RATE: u64 = 44100;
+pub type AudioBuff = ([f32; AUDIO_BUF_LEN], [f32; AUDIO_BUF_LEN]);
+
 pub mod args;
+pub mod audio_player;
 pub mod cpu;
 pub(crate) mod gpu;
 pub(crate) mod joypad;
 pub(crate) mod mbc;
 pub(crate) mod memory_bus;
+pub(crate) mod sound;
 
 #[macro_export]
 macro_rules! bit {
     ($val:expr, $ith:expr) => {
-        (($val >> $ith) & 1 == 1)
+        ($val >> $ith) & 1 == 1
     };
 }
 

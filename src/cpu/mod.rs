@@ -2,7 +2,10 @@ pub mod instruction;
 mod registers;
 
 pub use crate::joypad::JoypadKey;
-use crate::memory_bus::MemoryBus;
+use crate::{
+    audio_player::{AudioPlayer, VoidAudioPlayer},
+    memory_bus::MemoryBus,
+};
 
 use instruction::Instruction;
 use registers::{CpuRegisters, HALF_CARRY_MASK};
@@ -24,10 +27,10 @@ pub struct CPU {
 impl CPU {
     const INSTRUCTION_PREFIX: u8 = 0xCB;
 
-    pub fn new(game_rom: Vec<u8>) -> Self {
+    pub fn new(game_rom: Vec<u8>, player: Box<dyn AudioPlayer>) -> Self {
         Self {
             registers: CpuRegisters::new(),
-            memory: MemoryBus::new(game_rom),
+            memory: MemoryBus::new(game_rom, player),
             pc: 0x100,
             sp: 0xFFFE,
             is_halted: false,
@@ -35,6 +38,10 @@ impl CPU {
             di_timer: 0,
             ei_timer: 0,
         }
+    }
+
+    pub fn new_without_sound(game_rom: Vec<u8>) -> Self {
+        Self::new(game_rom, Box::new(VoidAudioPlayer::new()))
     }
 
     pub fn cycle(&mut self) -> u64 {
@@ -1184,7 +1191,7 @@ mod test {
 
     #[test]
     fn instruction_swap_bits() {
-        let mut cpu = CPU::new(vec![0; 0x200]);
+        let mut cpu = CPU::new_without_sound(vec![0; 0x200]);
         let mut flag = registers::FlagsRegister {
             zero: false,
             subtract: false,

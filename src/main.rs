@@ -1,6 +1,12 @@
 use std::sync::mpsc::{self, Receiver, SyncSender};
 
-use gbemu::{args::parse_args, cpu::JoypadKey, cpu::CPU, SCREEN_HEIGHT, SCREEN_WIDTH};
+use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use gbemu::{
+    args::parse_args,
+    audio_player::CpalAudioPlayer,
+    cpu::{JoypadKey, CPU},
+    SCREEN_HEIGHT, SCREEN_WIDTH,
+};
 use minifb::{Key, Window};
 
 type GuiFrame = [u32; SCREEN_HEIGHT * SCREEN_WIDTH];
@@ -32,7 +38,12 @@ fn main() {
 
     let content = gbemu::read_rom(&args.rom_path).unwrap();
 
-    let cpu = CPU::new(content);
+    let audio_buf = mpsc::channel();
+
+    let audio_stream = create_cpal_player(audio_buf.1);
+
+    let cpu = CPU::new(content, Box::new(CpalAudioPlayer::new(audio_buf.0)));
+
     let mut window = Window::new(
         "DMG-01",
         SCREEN_WIDTH,
@@ -85,6 +96,7 @@ fn main() {
     // Drop, so the CPU will stop because no one is sending/listening for updates.
     drop(gui_frame.1);
     drop(key_events.0);
+    drop(audio_stream);
 
     cpu_run.join().unwrap();
 }
@@ -135,4 +147,55 @@ fn spawn_limiter(ms: u64) -> Receiver<()> {
         snd.send(()).unwrap();
     });
     rcv
+}
+
+fn create_cpal_player(audio_buf: Receiver<gbemu::AudioBuff>) -> cpal::Stream {
+    let device = cpal::default_host().default_output_device().unwrap();
+
+    let err_cb = |err| eprintln!("Error during playing audio: {}", err);
+
+    let available_configs = device.supported_output_configs().unwrap();
+
+    let sample_rate = cpal::SampleRate(gbemu::SAMPLE_RATE as u32);
+    let mut config = None;
+
+    for curr_config in available_configs {
+        if curr_config.channels() == 2 && curr_config.sample_format() == cpal::SampleFormat::F32 {
+            if curr_config.min_sample_rate() <= sample_rate
+                && sample_rate <= curr_config.max_sample_rate()
+            {
+                config = Some(curr_config.with_sample_rate(sample_rate));
+            } else {
+                panic!("Sample rate is not supported!");
+            }
+        }
+    }
+
+    let config = config.expect("Can't select audio config!");
+    let sample_format = config.sample_format();
+    let config = config.config();
+
+    let stream = match sample_format {
+        cpal::SampleFormat::F32 => device.build_output_stream(
+            &config,
+            move |data: &mut [f32], _callback_info: &cpal::OutputCallbackInfo| {
+                if let Ok(buff) = audio_buf.try_recv() {
+                    let max_len = std::cmp::min(data.len() / 2, buff.0.len());
+                    for (idx, (lb, rb)) in buff.0.into_iter().zip(buff.1).enumerate().take(max_len)
+                    {
+                        data[idx * 2] = lb;
+                        data[idx * 2 + 1] = rb;
+                    }
+                }
+            },
+            err_cb,
+            None,
+        ),
+        _ => panic!("Unsupported sample format '{sample_format}'!"),
+    }
+    .unwrap();
+
+    stream.play().unwrap();
+
+    stream
 }

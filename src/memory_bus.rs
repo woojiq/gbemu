@@ -1,18 +1,24 @@
 // https://gbdev.io/pandocs/Memory_Map.html
 
 use crate::{
+    audio_player::AudioPlayer,
     bit,
     gpu::GPU,
     joypad::{Joypad, JoypadKey},
     mbc::MBC,
+    sound::Sound,
 };
 
 pub const ROM_BANK_0_START: u16 = 0x0000;
+#[allow(dead_code)]
 pub const ROM_BANK_0_END: u16 = 0x3FFF;
+#[allow(dead_code)]
 pub const ROM_BANK_0_SIZE: usize = (ROM_BANK_0_END - ROM_BANK_0_START + 1) as usize;
 
+#[allow(dead_code)]
 pub const ROM_BANK_N_START: u16 = 0x4000;
 pub const ROM_BANK_N_END: u16 = 0x7FFF;
+#[allow(dead_code)]
 pub const ROM_BANK_N_SIZE: usize = (ROM_BANK_N_END - ROM_BANK_N_START + 1) as usize;
 
 pub const VIDEO_RAM_START: u16 = 0x8000;
@@ -21,6 +27,7 @@ pub const VIDEO_RAM_SIZE: usize = (VIDEO_RAM_END - VIDEO_RAM_START + 1) as usize
 
 pub const EXTERNAL_RAM_START: u16 = 0xA000;
 pub const EXTERNAL_RAM_END: u16 = 0xBFFF;
+#[allow(dead_code)]
 pub const EXTERNAL_RAM_SIZE: usize = (EXTERNAL_RAM_END - EXTERNAL_RAM_START + 1) as usize;
 
 pub const WORKING_RAM_START: u16 = 0xC000;
@@ -59,6 +66,7 @@ pub struct MemoryBus {
     wram: [u8; WORKING_RAM_SIZE],
 
     pub gpu: GPU,
+    pub sound: Sound,
 
     // IO registers:
     interrupt_enable: InterruptFlags,
@@ -103,12 +111,13 @@ pub struct InterruptFlags {
 }
 
 impl MemoryBus {
-    pub fn new(game_rom: Vec<u8>) -> Self {
+    pub fn new(game_rom: Vec<u8>, player: Box<dyn AudioPlayer>) -> Self {
         let mut bus = Self {
             mbc: crate::mbc::init(game_rom),
             wram: [0; WORKING_RAM_SIZE],
 
             gpu: GPU::new(),
+            sound: Sound::new(player),
 
             joypad: Joypad::new(),
             divider: Timer::new_enabled(TimerRateHz::F16384),
@@ -182,6 +191,8 @@ impl MemoryBus {
         let inter = self.gpu.step(cycles);
         self.interrupt_flag.vblank |= inter.vblank;
         self.interrupt_flag.lcd |= inter.lcd;
+
+        self.sound.cycle(cycles);
 
         cycles
     }
@@ -299,13 +310,8 @@ impl MemoryBus {
                     | ((self.timer.enable as u8) << 2)
             }
             0xFF0F => 0b11100000 | u8::from(self.interrupt_flag),
-            0xFF10..=0xFF26 => {
-                0xFF
-                // unimplemented!("Reading from Audio registers is not supported yet."),
-            }
-            0xFF30..=0xFF3F => {
-                unimplemented!("Reading from Wave pattern registers is not supported yet.")
-            }
+            0xFF10..=0xFF26 => self.sound.read_byte(addr),
+            0xFF30..=0xFF3F => self.sound.read_byte(addr),
             0xFF40 => u8::from(self.gpu.lcd_control),
             0xFF41 => (1 << 7) | self.gpu.lcd_status.get_status_byte(),
             0xFF42 => self.gpu.viewport.y,
@@ -343,12 +349,8 @@ impl MemoryBus {
                 self.timer.enable = val & (1 << 2) != 0;
             }
             0xFF0F => self.interrupt_flag = InterruptFlags::from(val),
-            0xFF10..=0xFF26 => {
-                // TODO: Audio.
-            }
-            0xFF30..=0xFF3F => {
-                // TODO: Wave pattern.
-            }
+            0xFF10..=0xFF26 => self.sound.write_byte(addr, val),
+            0xFF30..=0xFF3F => self.sound.write_byte(addr, val),
             0xFF40 => {
                 let inter = self.gpu.set_lcd_control(val);
                 self.interrupt_flag.vblank |= inter.vblank;

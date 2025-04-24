@@ -47,7 +47,7 @@ impl super::MBC for MBC1 {
         };
 
         let addr = (bank * 0x4000) | (addr as usize & 0x3FFF);
-        *self.rom.get(addr).unwrap()
+        *self.rom.get(addr).unwrap_or(&0xFF)
     }
 
     fn write_rom(&mut self, addr: u16, val: u8) {

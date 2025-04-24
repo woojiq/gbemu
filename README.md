@@ -2,7 +2,6 @@
 
 ## TODO (most important)
 
-* Sound.
 * Save game state.
 * MBC2, MBC3, MBC5 support.
 * Write one ROM test myself.
@@ -29,6 +28,8 @@ PyBoy: https://github.com/Baekalfen/PyBoy/blob/master/extras/PyBoy.pdf
 DMG-01 (How to Emulate a Game Boy): https://rylev.github.io/DMG-01/public/book
 
 Rust implementation (DMG-01): https://github.com/rylev/DMG-01/blob/master/lib-dmg-01/src
+
+Rust implementation (gameroy): https://github.com/Rodrigodd/gameroy.git
 
 Opcodes: https://izik1.github.io/gbops/
 
