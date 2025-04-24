@@ -4,6 +4,7 @@ mod mbc1;
 // mod mbc5;
 
 pub const KB: usize = 1024;
+#[allow(dead_code)]
 pub const MB: usize = 1024 * KB;
 
 pub const CARTRIDGE_TYPE_ADDR: usize = 0x147;

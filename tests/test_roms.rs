@@ -110,6 +110,11 @@ mod blargg {
             path!("instr_timing/instr_timing-dmg-cgb.png"),
             5_000_000
         ),
+        dmg_sound(
+            path!("dmg_sound/dmg_sound.gb"),
+            path!("dmg_sound/dmg_sound-dmg.png"),
+            500_000_000
+        ),
     );
 }
 

@@ -22,6 +22,7 @@ pub(crate) mod gpu;
 pub(crate) mod joypad;
 pub(crate) mod mbc;
 pub(crate) mod memory_bus;
+pub(crate) mod sound;
 
 #[macro_export]
 macro_rules! bit {
