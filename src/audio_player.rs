@@ -26,8 +26,6 @@ impl CpalAudioPlayer {
 
 impl AudioPlayer for CpalAudioPlayer {
     fn play(&mut self, buff: crate::AudioBuff) {
-        self.sender
-            .send((buff.0, buff.1))
-            .expect("probably remove this unwrap and ignore errors");
+        let _ = self.sender.send((buff.0, buff.1));
     }
 }

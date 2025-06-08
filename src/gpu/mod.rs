@@ -180,8 +180,6 @@ impl GPU {
         let mut inter = GpuInterrupts::default();
         if !self.lcd_control.lcd_enable && new.lcd_enable {
             self.switch_to_mode(PpuMode::OAMScan, &mut inter);
-            // TODO: Why 4? Maybe this:
-            // https://gist.github.com/SonoSooS/c0055300670d678b5ae8433e20bea595#fetch-and-stuff
             self.cycles = 4;
         } else if self.lcd_control.lcd_enable && !new.lcd_enable {
             self.cycles = 0;
@@ -305,7 +303,7 @@ impl GPU {
     fn draw_line(&mut self) {
         self.draw_tiles();
 
-        // TODO: Profile this shit: copying w*h*3 before drawing every line is too much.
+        // PERF: Profile this shit: copying w*h*3 before drawing every line is too much.
         let bg_state = self.buffer;
 
         self.draw_sprites(&bg_state);

@@ -45,32 +45,6 @@ impl CPU {
     }
 
     pub fn cycle(&mut self) -> u64 {
-        // eprintln!(
-        //     "PC 0x{:X} SP 0x{:X}, INS 0x{:X}, NX 0x{:X}: {} {} {} {} {} {} {}, LINE {}, {}",
-        //     self.pc,
-        //     self.sp,
-        //     self.read_current_byte(),
-        //     self.read_next_byte(),
-        //     self.registers.a,
-        //     self.registers.b,
-        //     self.registers.c,
-        //     self.registers.d,
-        //     self.registers.e,
-        //     u8::from(self.registers.f),
-        //     self.registers.hl(),
-        //     self.memory.gpu.lcd_status.ly(),
-        //     self.memory.gpu.cycles,
-        // );
-        // eprintln!(
-        //     "0x{:X} 0x{:X} {} {}, {} {}",
-        //     self.pc,
-        //     self.read_current_byte(),
-        //     self.memory.divider().val,
-        //     self.memory.divider().cycles,
-        //     self.memory.timer().val,
-        //     self.memory.timer().cycles,
-        // );
-
         self.update_ime();
 
         let cycles = self.process_interrupts();
@@ -85,10 +59,6 @@ impl CPU {
         } else {
             self.execute(instruction)
         };
-
-        // eprintln!(
-        //     "Instruction {instruction:?} executed, cycles = {cycles}, new_pc = 0x{new_pc:X}."
-        // );
 
         self.pc = new_pc;
 
@@ -159,8 +129,7 @@ impl CPU {
             return 0;
         }
 
-        // TODO: Change to 5: https://gbdev.io/pandocs/Interrupts.html#interrupt-handling
-        4 * 4
+        5 * 4
     }
 
     fn interrupt(&mut self, addr: u16) {

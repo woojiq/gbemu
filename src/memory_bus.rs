@@ -292,10 +292,7 @@ impl MemoryBus {
 
         match addr {
             0xFF00 => u8::from(self.joypad),
-            0xFF01..=0xFF02 => {
-                0xFF
-                // TODO: Serial transfer read.
-            }
+            0xFF01..=0xFF02 => 0xFF,
             0xFF04 => self.divider.val,
             0xFF05 => self.timer.val,
             0xFF06 => self.timer.modulo,
@@ -332,9 +329,7 @@ impl MemoryBus {
 
         match addr {
             0xFF00 => self.joypad.set_mode(val),
-            0xFF01..=0xFF02 => {
-                // TODO: Serial transfer write.
-            }
+            0xFF01..=0xFF02 => {}
             0xFF04 => self.divider.val = 0,
             0xFF05 => self.timer.val = val,
             0xFF06 => self.timer.modulo = val,
@@ -388,15 +383,8 @@ impl MemoryBus {
     }
 
     fn dma_transfer(&mut self, addr: u16) {
-        // TODO: Use OAM_START/END.
-        const DMA_DEST_START: u16 = 0xFE00;
-        const DMA_DEST_END: u16 = 0xFE9F;
-
-        for dest_addr in DMA_DEST_START..=DMA_DEST_END {
-            self.write_byte(
-                dest_addr,
-                self.read_byte(addr + (dest_addr - DMA_DEST_START)),
-            );
+        for dest_addr in OAM_START..=OAM_END {
+            self.write_byte(dest_addr, self.read_byte(addr + (dest_addr - OAM_START)));
         }
     }
 }

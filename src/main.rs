@@ -49,7 +49,7 @@ fn main() {
         SCREEN_WIDTH,
         SCREEN_HEIGHT,
         minifb::WindowOptions {
-            scale: minifb::Scale::X4,
+            resize: true,
             ..Default::default()
         },
     )
